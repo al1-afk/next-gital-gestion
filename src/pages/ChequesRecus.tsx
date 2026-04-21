@@ -1,63 +1,140 @@
-import { useState } from 'react'
-import { Plus, Banknote, Trash2 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, Banknote, Trash2, CheckCircle2, Clock } from 'lucide-react'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { chequesRecusApi } from '@/lib/api'
 import { toast } from 'sonner'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { chequesRecusSchema } from '@/lib/importExportSchemas'
 
-interface Cheque { id: string; reference: string; montant: number; emetteur: string; banque: string; date_reception: string; date_depot?: string; statut: 'recu' | 'depose' | 'encaisse' | 'refuse' | 'annule' }
-
-const MOCK: Cheque[] = [
-  { id: '1', reference: 'CHQ-2026-001', montant: 6000, emetteur: 'Immobilier Premium', banque: 'CIH Bank', date_reception: '2026-04-05', date_depot: '2026-04-06', statut: 'encaisse' },
-  { id: '2', reference: 'CHQ-2026-002', montant: 5000, emetteur: 'Mode & Co', banque: 'BMCE', date_reception: '2026-04-08', statut: 'depose' },
-  { id: '3', reference: 'CHQ-2026-003', montant: 12000, emetteur: 'FoodTech MA', banque: 'Attijariwafa', date_reception: '2026-04-10', statut: 'recu' },
-]
-
-const STATUT = {
-  recu:     { label: 'Reçu',     variant: 'default' as const },
-  depose:   { label: 'Déposé',   variant: 'default' as const },
-  encaisse: { label: 'Encaissé', variant: 'success' as const },
-  refuse:   { label: 'Refusé',   variant: 'destructive' as const },
-  annule:   { label: 'Annulé',   variant: 'secondary' as const },
+interface Cheque {
+  id: string; created_at: string; reference: string; montant: number
+  emetteur: string; banque: string; date_reception: string
+  date_depot?: string; statut: 'recu' | 'depose' | 'encaisse' | 'refuse' | 'annule'
 }
 
+const STATUT = {
+  recu:     { label: 'Reçu',     variant: 'default'      as const },
+  depose:   { label: 'Déposé',   variant: 'default'      as const },
+  encaisse: { label: 'Encaissé', variant: 'success'      as const },
+  refuse:   { label: 'Refusé',   variant: 'destructive'  as const },
+  annule:   { label: 'Annulé',   variant: 'secondary'    as const },
+}
+
+const EMPTY_FORM = { reference: '', montant: 0, emetteur: '', banque: '', date_reception: new Date().toISOString().slice(0, 10), statut: 'recu' as Cheque['statut'] }
+
 export default function ChequesRecus() {
-  const [cheques, setCheques] = useState(MOCK)
+  const qc = useQueryClient()
+  const { data: cheques = [], isLoading } = useQuery<Cheque[]>({
+    queryKey: ['cheques_recus'],
+    queryFn: () => chequesRecusApi.list({ orderBy: 'date_reception', order: 'desc' }) as Promise<Cheque[]>,
+  })
+
+  const create = useMutation({
+    mutationFn: (data: typeof EMPTY_FORM) => chequesRecusApi.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['cheques_recus'] }); toast.success('Chèque enregistré'); setShowForm(false); setForm(EMPTY_FORM) },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => chequesRecusApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['cheques_recus'] }); toast.success('Supprimé') },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ reference: '', montant: 0, emetteur: '', banque: '', date_reception: new Date().toISOString().slice(0, 10), statut: 'recu' as Cheque['statut'] })
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_RANGE)
+
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
+  const filteredCheques = useMemo(() => cheques.filter(c => dateMatch(c.date_reception)), [cheques, dateMatch])
+
+  const totalEncaisse = filteredCheques.filter(c => c.statut === 'encaisse').reduce((s, c) => s + c.montant, 0)
+  const totalRecus    = filteredCheques.reduce((s, c) => s + c.montant, 0)
+  const enAttente     = filteredCheques.filter(c => c.statut === 'recu' || c.statut === 'depose').length
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Chèques reçus</h1>
-          <p className="text-muted-foreground text-sm mt-1">{cheques.length} chèques · {formatCurrency(cheques.reduce((s, c) => s + c.montant, 0))}</p>
+          <p className="text-muted-foreground text-sm mt-1">{filteredCheques.length} chèques · {formatCurrency(totalRecus)}</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Enregistrer</Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={chequesRecusSchema}
+            data={cheques}
+            onImport={async (row) => { await create.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Enregistrer</Button>
+        </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead><tr className="table-header"><th>Référence</th><th>Émetteur</th><th>Banque</th><th>Réception</th><th>Dépôt</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
-          <tbody>
-            {cheques.map(c => (
-              <tr key={c.id} className="table-row group">
-                <td className="font-mono text-foreground">{c.reference}</td>
-                <td className="text-muted-foreground">{c.emetteur}</td>
-                <td className="text-muted-foreground">{c.banque}</td>
-                <td className="text-muted-foreground">{formatDate(c.date_reception)}</td>
-                <td className="text-muted-foreground">{c.date_depot ? formatDate(c.date_depot) : '—'}</td>
-                <td className="font-semibold text-emerald-400">{formatCurrency(c.montant)}</td>
-                <td><Badge variant={STATUT[c.statut].variant}>{STATUT[c.statut].label}</Badge></td>
-                <td><Button variant="ghost" size="icon" className="w-7 h-7 text-red-400 opacity-0 group-hover:opacity-100" onClick={() => { setCheques(p => p.filter(x => x.id !== c.id)); toast.success('Supprimé') }}><Trash2 className="w-3.5 h-3.5" /></Button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {cheques.length === 0 && <div className="empty-state"><Banknote className="empty-state-icon" /><p className="empty-state-title">Aucun chèque</p></div>}
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalEncaisse)}</p><p className="text-xs text-muted-foreground mt-0.5">Encaissé</p></div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            <Banknote className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-foreground">{formatCurrency(totalRecus)}</p><p className="text-xs text-muted-foreground mt-0.5">Total reçus</p></div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
+            <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-amber-600 dark:text-amber-400">{enAttente}</p><p className="text-xs text-muted-foreground mt-0.5">En attente</p></div>
+        </div>
+      </div>
+
+      <div className="card-premium overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>
+        ) : (
+          <table className="w-full">
+            <thead className="table-header">
+              <tr><th>Référence</th><th>Émetteur</th><th>Banque</th><th>Réception</th><th>Dépôt</th><th>Montant</th><th>Statut</th><th></th></tr>
+            </thead>
+            <tbody>
+              {filteredCheques.map(c => (
+                <tr key={c.id} className="table-row group">
+                  <td className="font-mono text-foreground">{c.reference}</td>
+                  <td className="text-muted-foreground">{c.emetteur}</td>
+                  <td className="text-muted-foreground">{c.banque}</td>
+                  <td className="text-muted-foreground">{formatDate(c.date_reception)}</td>
+                  <td className="text-muted-foreground">{c.date_depot ? formatDate(c.date_depot) : '—'}</td>
+                  <td className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(c.montant)}</td>
+                  <td><Badge variant={STATUT[c.statut].variant}>{STATUT[c.statut].label}</Badge></td>
+                  <td>
+                    <Button variant="ghost" size="icon" className="w-7 h-7 text-red-400 opacity-0 group-hover:opacity-100"
+                      onClick={() => remove.mutate(c.id)}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {!isLoading && filteredCheques.length === 0 && (
+          <div className="empty-state"><Banknote className="empty-state-icon" /><p className="empty-state-title">Aucun chèque</p></div>
+        )}
       </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -79,7 +156,9 @@ export default function ChequesRecus() {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button onClick={() => { if (!form.emetteur) return; setCheques(p => [{ ...form, id: Date.now().toString() }, ...p]); setShowForm(false); toast.success('Enregistré') }}>Enregistrer</Button>
+              <Button disabled={create.isPending || !form.emetteur} onClick={() => create.mutate(form)}>
+                {create.isPending ? 'Enregistrement...' : 'Enregistrer'}
+              </Button>
             </div>
           </div>
         </DialogContent>

@@ -3,13 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Plus, Search, User, Building2, Phone, Mail, MapPin,
-  Edit2, Trash2, Loader2, Eye, Download
+  Edit2, Trash2, Loader2, Eye
 } from 'lucide-react'
 import { useClients, useCreateClient, useUpdateClient, useDeleteClient, type Client } from '@/hooks/useClients'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatDate, getInitials } from '@/lib/utils'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { clientsSchema } from '@/lib/importExportSchemas'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 
 function ClientForm({ client, onClose }: { client?: Client; onClose: () => void }) {
   const create = useCreateClient()
@@ -83,14 +88,20 @@ function ClientForm({ client, onClose }: { client?: Client; onClose: () => void 
 export default function Clients() {
   const navigate = useNavigate()
   const { data: clients = [], isLoading } = useClients()
+  const createClient = useCreateClient()
   const deleteClient = useDeleteClient()
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | undefined>()
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_RANGE)
 
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
   const filtered = useMemo(() =>
-    clients.filter(c => !search || [c.nom, c.email, c.entreprise, c.ville].some(f => f?.toLowerCase().includes(search.toLowerCase())))
-  , [clients, search])
+    clients.filter(c =>
+      (!search || [c.nom, c.email, c.entreprise, c.ville].some(f => f?.toLowerCase().includes(search.toLowerCase())))
+      && dateMatch(c.created_at)
+    )
+  , [clients, search, dateMatch])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -100,15 +111,21 @@ export default function Clients() {
           <p className="text-muted-foreground text-sm mt-1">{clients.length} clients au total</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm">
-            <Download className="w-4 h-4" />
-            Exporter
-          </Button>
+          <ImportExportButtons
+            schema={clientsSchema}
+            data={clients}
+            onImport={async (row) => { await createClient.mutateAsync(row as any) }}
+          />
           <Button size="sm" onClick={() => { setEditingClient(undefined); setShowForm(true) }}>
             <Plus className="w-4 h-4" />
             Nouveau client
           </Button>
         </div>
+      </div>
+
+      {/* Date filter */}
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* Search */}
@@ -120,21 +137,21 @@ export default function Clients() {
       {/* Grid */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pb-6">
           {filtered.map((c, i) => (
             <motion.div
               key={c.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="card p-5 hover:border-blue-500/30 transition-all duration-300 group"
+              className="card-premium p-5 hover:border-blue-500/30 transition-all duration-300 group"
             >
               <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600/30 to-blue-800/30 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-blue-300 font-bold text-sm">{getInitials(c.nom)}</span>
+                <div className="avatar-initials w-12 h-12 flex-shrink-0">
+                  <span className="font-bold text-sm">{getInitials(c.nom)}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground truncate">{c.nom}</h3>
@@ -184,8 +201,8 @@ export default function Clients() {
 
               <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Depuis {formatDate(c.created_at)}</span>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-400 hover:text-blue-300"
-                  onClick={() => navigate(`/clients/${c.id}`)}>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  onClick={() => navigate(c.id)}>
                   <Eye className="w-3 h-3 mr-1" />
                   Détails
                 </Button>

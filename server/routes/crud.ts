@@ -1,0 +1,150 @@
+import { Router, Request, Response } from 'express'
+import { tenantQuery, tenantQueryOne } from '../db/pool'
+import { requireAuth } from '../middleware/auth'
+import { safeColumn } from '../middleware/security'
+
+const router = Router()
+router.use(requireAuth)
+
+const ALLOWED_TABLES = new Set([
+  'clients', 'prospects', 'devis', 'factures', 'paiements',
+  'depenses', 'contrats', 'produits', 'fournisseurs', 'team_members',
+  'domaines', 'hebergements', 'cheques_recus', 'cheques_emis',
+  'abonnements', 'client_subscriptions', 'taches',
+  'automation_rules', 'automation_logs', 'alerts',
+  'calendrier_events', 'bank_accounts', 'credits_dettes',
+  'bons_commande', 'conges', 'salaires_paiements', 'tache_actions',
+])
+
+const SAFE_COL = /^[a-z_][a-z0-9_]{0,63}$/
+
+function guardTable(table: string, res: Response): boolean {
+  if (!ALLOWED_TABLES.has(table)) {
+    res.status(400).json({ error: `Table non autorisée` })
+    return false
+  }
+  return true
+}
+
+/* ── GET /api/:table ─────────────────────────────────────────── */
+router.get('/:table', async (req: Request, res: Response) => {
+  const { table } = req.params
+  if (!guardTable(table, res)) return
+
+  const tenantId = req.user!.tenantId
+  const orderBy  = safeColumn(String(req.query.orderBy || 'created_at'))
+  const order    = req.query.order === 'asc' ? 'ASC' : 'DESC'
+  const limit    = Math.min(Number(req.query.limit  || 500), 1000)
+  const offset   = Math.max(Number(req.query.offset || 0), 0)
+
+  try {
+    /* RLS enforced by SET LOCAL app.current_tenant in tenantQuery */
+    const rows = await tenantQuery(
+      tenantId,
+      `SELECT * FROM ${table} ORDER BY ${orderBy} ${order} LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    )
+    res.json(rows)
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+/* ── GET /api/:table/:id ─────────────────────────────────────── */
+router.get('/:table/:id', async (req: Request, res: Response) => {
+  const { table, id } = req.params
+  if (!guardTable(table, res)) return
+
+  try {
+    const row = await tenantQueryOne(
+      req.user!.tenantId,
+      `SELECT * FROM ${table} WHERE id = $1`,
+      [id]
+    )
+    if (!row) return res.status(404).json({ error: 'Non trouvé' })
+    res.json(row)
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+/* Empty string → null (Postgres rejects "" for date/numeric/uuid/enum columns) */
+function normalizeValues(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, v === '' ? null : v])
+  )
+}
+
+/* ── POST /api/:table ────────────────────────────────────────── */
+router.post('/:table', async (req: Request, res: Response) => {
+  const { table } = req.params
+  if (!guardTable(table, res)) return
+
+  const raw  = { ...req.body, tenant_id: req.user!.tenantId }
+  const data = normalizeValues(Object.fromEntries(Object.entries(raw).filter(([k]) => SAFE_COL.test(k))))
+  const keys = Object.keys(data)
+  const vals = Object.values(data)
+  const ph   = keys.map((_, i) => `$${i + 1}`).join(', ')
+  const cols = keys.join(', ')
+
+  try {
+    const row = await tenantQueryOne(
+      req.user!.tenantId,
+      `INSERT INTO ${table} (${cols}) VALUES (${ph}) RETURNING *`,
+      vals
+    )
+    res.status(201).json(row)
+  } catch (err: any) {
+    console.error(`[POST /api/${table}]`, err?.code, err?.message, err?.detail, { keys })
+    res.status(500).json({ error: `DB ${err?.code ?? ''}: ${err?.message ?? 'Erreur serveur'}`, detail: err?.detail })
+  }
+})
+
+/* ── PATCH /api/:table/:id ───────────────────────────────────── */
+router.patch('/:table/:id', async (req: Request, res: Response) => {
+  const { table, id } = req.params
+  if (!guardTable(table, res)) return
+
+  const data = normalizeValues(Object.fromEntries(
+    Object.entries(req.body as object)
+      .filter(([k]) => SAFE_COL.test(k) && k !== 'tenant_id')
+  ))
+  const keys = Object.keys(data)
+  if (!keys.length) return res.status(400).json({ error: 'Aucun champ à mettre à jour' })
+
+  const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+  const vals = [...Object.values(data), id]
+
+  try {
+    const row = await tenantQueryOne(
+      req.user!.tenantId,
+      `UPDATE ${table} SET ${sets} WHERE id = $${keys.length + 1} RETURNING *`,
+      vals
+    )
+    if (!row) return res.status(404).json({ error: 'Non trouvé' })
+    res.json(row)
+  } catch (err: any) {
+    console.error(`[PATCH /api/${table}/${id}]`, err?.code, err?.message, err?.detail, { keys })
+    res.status(500).json({ error: `DB ${err?.code ?? ''}: ${err?.message ?? 'Erreur serveur'}`, detail: err?.detail })
+  }
+})
+
+/* ── DELETE /api/:table/:id ──────────────────────────────────── */
+router.delete('/:table/:id', async (req: Request, res: Response) => {
+  const { table, id } = req.params
+  if (!guardTable(table, res)) return
+
+  try {
+    const row = await tenantQueryOne(
+      req.user!.tenantId,
+      `DELETE FROM ${table} WHERE id = $1 RETURNING id`,
+      [id]
+    )
+    if (!row) return res.status(404).json({ error: 'Non trouvé' })
+    res.json({ success: true })
+  } catch (err: any) {
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+export default router

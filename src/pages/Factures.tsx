@@ -27,6 +27,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { generateFacturePDF } from '@/lib/generatePdf'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { facturesSchema } from '@/lib/importExportSchemas'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 
 /* ─── Status config ──────────────────────────────────────────────── */
 type BadgeVariant = 'success' | 'warning' | 'destructive' | 'default' | 'secondary' | 'outline'
@@ -143,7 +148,7 @@ function SendEmailDialog({
   onMarkSent: () => void
 }) {
   const [emailTo, setEmailTo] = useState(facture?.client_email || '')
-  const subject = `Facture ${facture?.numero} — NextGital`
+  const subject = `Facture ${facture?.numero} — GestiQ`
   const body = [
     `Bonjour,`,
     ``,
@@ -154,7 +159,7 @@ function SendEmailDialog({
     `N'hésitez pas à nous contacter pour toute question.`,
     ``,
     `Cordialement,`,
-    `NextGital`,
+    `GestiQ`,
   ].join('\n').trim()
 
   const handleOpenMailto = () => {
@@ -172,7 +177,7 @@ function SendEmailDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MailOpen className="w-5 h-5 text-[#378ADD]" /> Envoyer par email
+            <MailOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" /> Envoyer par email
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
@@ -506,7 +511,7 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
           onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
           rows={3}
           placeholder="Notes internes, conditions de paiement…"
-          className="w-full rounded-lg border border-border bg-[var(--surface-input)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-[#378ADD] focus:shadow-[0_0_0_3px_rgba(55,138,221,0.15)] transition-all"
+          className="w-full rounded-lg border border-border bg-[var(--surface-input)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] transition-all"
         />
       </div>
 
@@ -524,6 +529,7 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export default function Factures() {
   const { data: factures = [], isLoading } = useFactures()
+  const createFacture    = useCreateFacture()
   const updateFacture    = useUpdateFacture()
   const deleteFacture    = useDeleteFacture()
   const markPaid         = useMarkFacturePaid()
@@ -532,6 +538,7 @@ export default function Factures() {
 
   const [search,       setSearch]      = useState('')
   const [filterStatut, setFilterStatut]= useState('all')
+  const [dateRange,    setDateRange]   = useState<DateRange>(DEFAULT_RANGE)
 
   // Modal states
   const [showForm,     setShowForm]    = useState(false)
@@ -541,14 +548,16 @@ export default function Factures() {
   const [emailTarget,  setEmailTarget] = useState<Facture | null>(null)
 
   /* ── Filtered list ─────────────────────────────────────────────── */
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
   const filtered = useMemo(() =>
     factures.filter(f => {
       const q = search.toLowerCase()
       const matchSearch = !search || [f.numero, f.client_nom].some(x => x?.toLowerCase().includes(q))
       const matchStatut = filterStatut === 'all' || f.statut === filterStatut
-      return matchSearch && matchStatut
+      const matchDate   = dateMatch(f.date_emission)
+      return matchSearch && matchStatut && matchDate
     }),
-    [factures, search, filterStatut]
+    [factures, search, filterStatut, dateMatch]
   )
 
   /* ── KPI stats ─────────────────────────────────────────────────── */
@@ -603,29 +612,55 @@ export default function Factures() {
             )}
           </p>
         </div>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="w-4 h-4" /> Nouvelle facture
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={facturesSchema}
+            data={factures}
+            onImport={async (row) => { await createFacture.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={openNew}>
+            <Plus className="w-4 h-4" /> Nouvelle facture
+          </Button>
+        </div>
       </div>
 
       {/* ── KPI cards ───────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total facturé',  value: fmtCur(stats.totalTTC), cls: '' },
-          { label: 'Encaissé',       value: fmtCur(stats.encaisse),  cls: 'text-[#27500A] dark:text-emerald-400' },
-          { label: 'En attente',     value: fmtCur(stats.impaye),    cls: stats.impaye > 0 ? 'text-[#A32D2D] dark:text-red-400' : '' },
-        ].map((kpi, i) => (
-          <motion.div
-            key={kpi.label}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.06 }}
-            className="card p-5"
-          >
-            <p className="kpi-label mb-2">{kpi.label}</p>
-            <p className={`text-2xl font-bold ${kpi.cls || 'text-foreground'}`}>{kpi.value}</p>
-          </motion.div>
-        ))}
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
+          className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            <Receipt className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-foreground">{fmtCur(stats.totalTTC)}</p>
+            <p className="kpi-label mt-0.5">Total facturé</p>
+          </div>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
+          className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{fmtCur(stats.encaisse)}</p>
+            <p className="kpi-label mt-0.5">Encaissé</p>
+          </div>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+          className="card-premium p-5 flex items-center gap-4">
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${stats.impaye > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
+            <Clock className={`w-5 h-5 ${stats.impaye > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
+          </div>
+          <div>
+            <p className={`text-xl font-extrabold ${stats.impaye > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>{fmtCur(stats.impaye)}</p>
+            <p className="kpi-label mt-0.5">En attente</p>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ── Date filter ──────────────────────────────────────────── */}
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* ── Statut breakdown pills ───────────────────────────────── */}
@@ -634,8 +669,8 @@ export default function Factures() {
           onClick={() => setFilterStatut('all')}
           className={`text-xs px-3 py-1.5 rounded-full border transition-all font-medium ${
             filterStatut === 'all'
-              ? 'bg-[#3a526b] text-white border-[#3a526b]'
-              : 'border-border text-muted-foreground hover:border-[#3a526b]/50'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'border-border text-muted-foreground hover:border-blue-400'
           }`}
         >
           Toutes ({factures.length})
@@ -649,8 +684,8 @@ export default function Factures() {
               onClick={() => setFilterStatut(filterStatut === key ? 'all' : key)}
               className={`text-xs px-3 py-1.5 rounded-full border transition-all font-medium ${
                 filterStatut === key
-                  ? 'bg-[#3a526b] text-white border-[#3a526b]'
-                  : 'border-border text-muted-foreground hover:border-[#3a526b]/50'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'border-border text-muted-foreground hover:border-blue-400'
               }`}
             >
               {cfg.label} ({count})
@@ -684,10 +719,10 @@ export default function Factures() {
       </div>
 
       {/* ── Table ───────────────────────────────────────────────── */}
-      <div className="card overflow-hidden">
+      <div className="card-premium overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
+            <thead className="table-header">
               <tr className="table-header">
                 <th>N° Facture</th>
                 <th>Client</th>
@@ -711,7 +746,7 @@ export default function Factures() {
                         <td>
                           <button
                             onClick={() => setViewTarget(f)}
-                            className="font-mono font-medium text-sm text-[#378ADD] hover:underline"
+                            className="font-mono font-medium text-sm text-blue-600 dark:text-blue-400 hover:underline"
                           >
                             {f.numero}
                           </button>
@@ -888,7 +923,7 @@ export default function Factures() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-[#378ADD]" />
+              <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               {editing ? 'Modifier la facture' : 'Nouvelle facture'}
             </DialogTitle>
           </DialogHeader>

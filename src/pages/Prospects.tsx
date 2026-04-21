@@ -2,11 +2,11 @@ import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   DragDropContext, Droppable, Draggable,
-  type DropResult,
+  type DropResult, type DragStart, type DragUpdate,
 } from '@hello-pangea/dnd'
 import {
   Plus, Search, LayoutList, Kanban, X, Trash2,
-  Mail, Building2, User, Calendar, Bell, DollarSign,
+  Mail, Building2, User, Calendar, Bell, DollarSign, TrendingUp, UserCheck,
   Loader2, AlertCircle, Phone, PhoneCall, FileText, Edit2,
   UserPlus, ArrowRightLeft, Clock, CheckSquare, Square, AlertTriangle,
 } from 'lucide-react'
@@ -26,6 +26,11 @@ import {
   useProspectLogs, useAddProspectLog,
   type ProspectLog, type LogType,
 } from '@/hooks/useProspectLogs'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { prospectsSchema } from '@/lib/importExportSchemas'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 
 /* ─── helpers ─────────────────────────────────────────────────────── */
 const TODAY = new Date().toISOString().slice(0, 10)
@@ -52,12 +57,12 @@ function formatDateTime(iso: string) {
 
 /* ─── Log type config ─────────────────────────────────────────────── */
 const LOG_CONFIG: Record<LogType, { icon: React.ElementType; color: string; bg: string }> = {
-  creation: { icon: UserPlus,        color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-  statut:   { icon: ArrowRightLeft,  color: 'text-blue-400',    bg: 'bg-blue-500/20'    },
-  note:     { icon: FileText,        color: 'text-violet-400',  bg: 'bg-violet-500/20'  },
-  edit:     { icon: Edit2,           color: 'text-amber-400',   bg: 'bg-amber-500/20'   },
-  appel:    { icon: PhoneCall,       color: 'text-cyan-400',    bg: 'bg-cyan-500/20'    },
-  email:    { icon: Mail,            color: 'text-pink-400',    bg: 'bg-pink-500/20'    },
+  creation: { icon: UserPlus,        color: 'text-emerald-600 dark:text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/20' },
+  statut:   { icon: ArrowRightLeft,  color: 'text-blue-600 dark:text-blue-600 dark:text-blue-400',       bg: 'bg-blue-500/20'    },
+  note:     { icon: FileText,        color: 'text-violet-600 dark:text-violet-400',   bg: 'bg-violet-500/20'  },
+  edit:     { icon: Edit2,           color: 'text-amber-600 dark:text-amber-600 dark:text-amber-400',     bg: 'bg-amber-500/20'   },
+  appel:    { icon: PhoneCall,       color: 'text-cyan-600 dark:text-cyan-400',       bg: 'bg-cyan-500/20'    },
+  email:    { icon: Mail,            color: 'text-pink-600 dark:text-pink-400',       bg: 'bg-pink-500/20'    },
 }
 
 /* ─── Timeline component ──────────────────────────────────────────── */
@@ -387,8 +392,8 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
                 </div>
               ) : (
                 <div className="flex items-center gap-3 pr-10">
-                  <div className="w-10 h-10 rounded-xl bg-[#378ADD]/20 flex items-center justify-center">
-                    <UserPlus className="w-5 h-5 text-[#378ADD]" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-foreground">Nouveau prospect</h2>
@@ -407,7 +412,7 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
                     onClick={() => setTab(t)}
                     className={`px-4 py-2.5 text-xs font-semibold transition-all border-b-2 -mb-px ${
                       tab === t
-                        ? 'border-[#378ADD] text-[#378ADD]'
+                        ? 'border-blue-600 text-blue-600'
                         : 'border-transparent text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -668,7 +673,7 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
                 <button
                   onClick={handleDelete}
                   disabled={del.isPending}
-                  className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-500 transition-colors disabled:opacity-50"
                 >
                   {del.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   Supprimer
@@ -684,7 +689,7 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
                     onClick={handleSave}
                     disabled={busy}
                     className="h-8 px-5"
-                    style={isEdit ? {} : { backgroundColor: '#378ADD' }}
+                    style={isEdit ? {} : { backgroundColor: undefined }}
                   >
                     {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     {isEdit ? 'Enregistrer' : 'Créer le prospect'}
@@ -719,7 +724,7 @@ function ProspectRow({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -16 }}
-      className={`border-b border-border hover:bg-muted/40 cursor-pointer transition-colors group ${selected ? 'bg-red-500/5' : ''}`}
+      className={`table-row cursor-pointer group ${selected ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
       onClick={() => onEdit(p)}
     >
       {/* Checkbox */}
@@ -766,7 +771,7 @@ function ProspectRow({
       <td className="px-4 py-3 text-xs text-muted-foreground">{p.source ?? '—'}</td>
       <td className="px-4 py-3">
         {p.date_relance ? (
-          <span className={`text-xs flex items-center gap-1 ${isToday ? 'text-amber-400 font-medium' : 'text-muted-foreground'}`}>
+          <span className={`text-xs flex items-center gap-1 ${isToday ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-muted-foreground'}`}>
             {isToday && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
             <Calendar className="w-3 h-3" />
             {isToday ? "Aujourd'hui" : formatDate(p.date_relance)}
@@ -777,7 +782,7 @@ function ProspectRow({
       </td>
       <td className="px-4 py-3 max-w-[200px]">
         {p.notes ? (
-          <span className="flex items-start gap-1.5 text-xs text-violet-400">
+          <span className="flex items-start gap-1.5 text-xs text-violet-600 dark:text-violet-400">
             <FileText className="w-3 h-3 flex-shrink-0 mt-0.5" />
             <span className="line-clamp-2 leading-snug">
               {p.notes}
@@ -792,46 +797,75 @@ function ProspectRow({
 }
 
 /* ─── KanbanCard ──────────────────────────────────────────────────── */
-function KanbanCard({ p, index, onEdit }: { p: Prospect; index: number; onEdit: (p: Prospect) => void }) {
+function KanbanCard({
+  p, index, onEdit, accent,
+}: {
+  p: Prospect
+  index: number
+  onEdit: (p: Prospect) => void
+  accent: string
+}) {
   const isToday = p.date_relance === TODAY
   return (
     <Draggable draggableId={p.id} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          {...provided.dragHandleProps}
-          className={`bg-[var(--surface-card)] border border-border rounded-lg p-3 cursor-pointer select-none transition-shadow ${
-            snapshot.isDragging ? 'shadow-xl ring-1 ring-[#378ADD]/50 rotate-1' : 'hover:shadow-md'
-          }`}
-          onClick={() => onEdit(p)}
-        >
-          <p className="text-sm font-medium text-foreground leading-snug mb-1">{p.nom}</p>
-          {p.entreprise && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
-              <Building2 className="w-3 h-3 flex-shrink-0" />
-              {p.entreprise}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            {p.valeur_estimee != null && (
-              <span className="text-xs font-semibold text-emerald-400">
-                {formatCurrency(p.valeur_estimee)}
-              </span>
+      {(provided, snapshot) => {
+        const libStyle     = provided.draggableProps.style
+        const isActiveDrag = snapshot.isDragging && !snapshot.isDropAnimating
+        const style: React.CSSProperties = {
+          ...libStyle,
+          transition: snapshot.isDropAnimating
+            ? libStyle?.transition
+            : isActiveDrag
+              ? 'box-shadow 180ms ease, background-color 180ms ease'
+              : 'box-shadow 220ms ease, transform 220ms cubic-bezier(0.2, 0, 0, 1), border-color 180ms ease',
+          transform: isActiveDrag
+            ? `${libStyle?.transform ?? ''} rotate(2.5deg) scale(1.03)`
+            : libStyle?.transform,
+          boxShadow: isActiveDrag
+            ? `0 18px 40px -12px ${accent}66, 0 6px 14px -6px rgba(0,0,0,0.25)`
+            : undefined,
+          borderLeft: `3px solid ${accent}`,
+        }
+        return (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            style={style}
+            className={`bg-[var(--surface-card)] border border-border rounded-lg p-3 select-none will-change-transform ${
+              snapshot.isDragging
+                ? 'cursor-grabbing shadow-xl ring-1 ring-offset-0'
+                : 'cursor-grab hover:shadow-md hover:-translate-y-0.5 active:cursor-grabbing'
+            }`}
+            onClick={() => { if (!snapshot.isDragging) onEdit(p) }}
+          >
+            <p className="text-sm font-medium text-foreground leading-snug mb-1">{p.nom}</p>
+            {p.entreprise && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                <Building2 className="w-3 h-3 flex-shrink-0" />
+                {p.entreprise}
+              </p>
             )}
-            {p.date_relance && (
-              <span className={`text-xs flex items-center gap-0.5 ${isToday ? 'text-amber-400' : 'text-muted-foreground'}`}>
-                {isToday && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-0.5" />}
-                <Calendar className="w-3 h-3" />
-                {isToday ? "Auj." : formatDate(p.date_relance)}
-              </span>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {p.valeur_estimee != null && (
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(p.valeur_estimee)}
+                </span>
+              )}
+              {p.date_relance && (
+                <span className={`text-xs flex items-center gap-0.5 ${isToday ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                  {isToday && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mr-0.5" />}
+                  <Calendar className="w-3 h-3" />
+                  {isToday ? "Auj." : formatDate(p.date_relance)}
+                </span>
+              )}
+            </div>
+            {p.source && (
+              <p className="text-xs text-muted-foreground mt-1.5 truncate">{p.source}</p>
             )}
           </div>
-          {p.source && (
-            <p className="text-xs text-muted-foreground mt-1.5 truncate">{p.source}</p>
-          )}
-        </div>
-      )}
+        )
+      }}
     </Draggable>
   )
 }
@@ -839,6 +873,7 @@ function KanbanCard({ p, index, onEdit }: { p: Prospect; index: number; onEdit: 
 /* ─── Main Page ───────────────────────────────────────────────────── */
 export default function Prospects() {
   const { data: prospects = [], isLoading, isError } = useProspects()
+  const createProspect  = useCreateProspect()
   const updateProspect  = useUpdateProspect()
   const deleteProspect  = useDeleteProspect()
   const addLog          = useAddProspectLog()
@@ -848,6 +883,7 @@ export default function Prospects() {
   const [search,       setSearch]       = useState('')
   const [filterStatut, setFilterStatut] = useState<string>('all')
   const [todayOnly,    setTodayOnly]    = useState(false)
+  const [dateRange,    setDateRange]    = useState<DateRange>(DEFAULT_RANGE)
   const [drawerOpen,   setDrawerOpen]   = useState(false)
   const [editTarget,   setEditTarget]   = useState<Prospect | null>(null)
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
@@ -859,6 +895,7 @@ export default function Prospects() {
     [prospects]
   )
 
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
   const filtered = useMemo(() =>
     prospects
       .filter(p => {
@@ -867,10 +904,11 @@ export default function Prospects() {
           || (p.entreprise ?? '').toLowerCase().includes(search.toLowerCase())
         const matchStatut  = filterStatut === 'all' || p.statut === filterStatut
         const matchToday   = !todayOnly || p.date_relance === TODAY
-        return matchSearch && matchStatut && matchToday
+        const matchDate    = dateMatch(p.created_at)
+        return matchSearch && matchStatut && matchToday && matchDate
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-    [prospects, search, filterStatut, todayOnly]
+    [prospects, search, filterStatut, todayOnly, dateMatch]
   )
 
   const openNew     = () => { setEditTarget(null); setDrawerOpen(true) }
@@ -906,8 +944,23 @@ export default function Prospects() {
     return map
   }, [filtered])
 
+  /* ── DnD drag state for smooth feedback ── */
+  const [dragSource, setDragSource] = useState<ProspectStatut | null>(null)
+  const [dragOver,   setDragOver]   = useState<ProspectStatut | null>(null)
+
+  const onDragStart = useCallback((start: DragStart) => {
+    setDragSource(start.source.droppableId as ProspectStatut)
+    setDragOver(start.source.droppableId as ProspectStatut)
+  }, [])
+
+  const onDragUpdate = useCallback((upd: DragUpdate) => {
+    setDragOver((upd.destination?.droppableId as ProspectStatut) ?? null)
+  }, [])
+
   /* ── DnD handler — auto-logs status change ── */
   const onDragEnd = useCallback((result: DropResult) => {
+    setDragSource(null)
+    setDragOver(null)
     const { draggableId, destination } = result
     if (!destination) return
     const newStatut = destination.droppableId as ProspectStatut
@@ -951,24 +1004,56 @@ export default function Prospects() {
             {stats.total} prospects · {stats.gagne} gagnés · Pipeline {formatCurrency(stats.pipe)}
           </p>
         </div>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="w-4 h-4" /> Nouveau prospect
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={prospectsSchema}
+            data={prospects}
+            onImport={async (row) => { await createProspect.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={openNew}>
+            <Plus className="w-4 h-4" /> Nouveau prospect
+          </Button>
+        </div>
       </div>
 
       {/* ── KPI cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total',          value: String(stats.total),          color: 'text-foreground',  bg: 'bg-muted'          },
-          { label: 'Gagnés',         value: String(stats.gagne),          color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-          { label: 'Valeur gagnée',  value: formatCurrency(stats.valeur), color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-          { label: 'Pipeline actif', value: formatCurrency(stats.pipe),   color: 'text-blue-400',    bg: 'bg-blue-500/10'    },
-        ].map(k => (
-          <div key={k.label} className={`card p-3 ${k.bg} text-center`}>
-            <p className={`text-lg font-bold ${k.color} leading-tight`}>{k.value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{k.label}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            <UserCheck className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-        ))}
+          <div>
+            <p className="text-2xl font-extrabold text-foreground">{stats.total}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Total prospects</p>
+          </div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            <CheckSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{stats.gagne}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Gagnés</p>
+          </div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center flex-shrink-0">
+            <DollarSign className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-teal-600 dark:text-teal-400">{formatCurrency(stats.valeur)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Valeur gagnée</p>
+          </div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-violet-600 dark:text-violet-400">{formatCurrency(stats.pipe)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Pipeline actif</p>
+          </div>
+        </div>
       </div>
 
       {/* ── Toolbar ── */}
@@ -980,7 +1065,7 @@ export default function Prospects() {
             onClick={() => setView('table')}
             className={`flex items-center gap-1.5 px-3 h-full text-xs font-medium transition-colors ${
               view === 'table'
-                ? 'bg-[#378ADD] text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-[var(--surface-card)] text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -990,7 +1075,7 @@ export default function Prospects() {
             onClick={() => setView('pipeline')}
             className={`flex items-center gap-1.5 px-3 h-full text-xs font-medium transition-colors ${
               view === 'pipeline'
-                ? 'bg-[#378ADD] text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-[var(--surface-card)] text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -1030,7 +1115,7 @@ export default function Prospects() {
           onClick={() => setTodayOnly(p => !p)}
           className={`relative flex items-center gap-2 h-8 px-3 rounded-lg text-xs font-medium transition-all border ${
             todayOnly
-              ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+              ? 'bg-amber-500/20 border-amber-500/50 text-amber-600 dark:text-amber-400'
               : 'bg-[var(--surface-card)] border-border text-muted-foreground hover:text-foreground'
           }`}
         >
@@ -1039,7 +1124,7 @@ export default function Prospects() {
               {todayCount}
             </span>
           )}
-          <Bell className={`w-3.5 h-3.5 ${todayCount > 0 ? 'text-amber-400' : ''}`} />
+          <Bell className={`w-3.5 h-3.5 ${todayCount > 0 ? 'text-amber-600 dark:text-amber-400' : ''}`} />
           À contacter aujourd'hui
           {todayOnly && (
             <span className="ml-1 w-4 h-4 rounded-full bg-amber-400 text-[10px] font-bold text-black flex items-center justify-center">
@@ -1049,6 +1134,11 @@ export default function Prospects() {
         </button>
       </div>
 
+      {/* Date filter */}
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
+      </div>
+
       {/* ── Loading / Error states ── */}
       {isLoading && (
         <div className="flex items-center justify-center py-16">
@@ -1056,7 +1146,7 @@ export default function Prospects() {
         </div>
       )}
       {isError && (
-        <div className="card p-4 flex items-center gap-3 text-red-400 border-red-500/30 bg-red-500/5">
+        <div className="card-premium p-4 flex items-center gap-3 text-red-400 border-red-500/30 bg-red-500/5">
           <AlertCircle className="w-5 h-5 flex-shrink-0" />
           <p className="text-sm">Erreur de connexion. Les données de démo sont affichées.</p>
         </div>
@@ -1104,24 +1194,22 @@ export default function Prospects() {
             )}
           </AnimatePresence>
 
-          <div className="card overflow-hidden">
+          <div className="card-premium overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
+                <thead className="table-header">
+                  <tr>
                     {/* Select-all checkbox */}
                     <th className="pl-4 pr-2 py-3 w-8"
                         onClick={toggleSelectAll}
                         title={selectedIds.size === filtered.length ? 'Tout désélectionner' : 'Tout sélectionner'}>
                       {filtered.length > 0 && selectedIds.size === filtered.length
-                        ? <CheckSquare className="w-4 h-4 text-red-400 cursor-pointer" />
+                        ? <CheckSquare className="w-4 h-4 text-blue-600 cursor-pointer" />
                         : <Square      className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />
                       }
                     </th>
                     {['Prospect', 'Contact', 'Statut', 'Valeur', 'Source', 'Relance', 'Dernière note'].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        {h}
-                      </th>
+                      <th key={h}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -1158,16 +1246,30 @@ export default function Prospects() {
           PIPELINE / KANBAN VIEW
       ══════════════════════════════════════════════ */}
       {!isLoading && view === 'pipeline' && (
-        <DragDropContext onDragEnd={onDragEnd}>
+        <DragDropContext
+          onDragStart={onDragStart}
+          onDragUpdate={onDragUpdate}
+          onDragEnd={onDragEnd}
+        >
           <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: 420 }}>
             {PROSPECT_STAGES.map(stage => {
-              const cards = byStage[stage.id] ?? []
-              const total = cards.reduce((s, p) => s + (p.valeur_estimee ?? 0), 0)
+              const cards    = byStage[stage.id] ?? []
+              const total    = cards.reduce((s, p) => s + (p.valeur_estimee ?? 0), 0)
+              const isActive = dragOver   === stage.id
+              const isSource = dragSource === stage.id
+              const dimmed   = dragSource && !isActive && !isSource
               return (
                 <div
                   key={stage.id}
-                  className="flex-shrink-0 flex flex-col rounded-xl border border-border bg-[var(--surface-card)] overflow-hidden"
-                  style={{ width: 220 }}
+                  className="flex-shrink-0 flex flex-col rounded-xl border bg-[var(--surface-card)] overflow-hidden"
+                  style={{
+                    width: 220,
+                    borderColor: isActive ? stage.accent : 'hsl(var(--border))',
+                    boxShadow: isActive ? `0 0 0 2px ${stage.accent}40, 0 8px 24px -10px ${stage.accent}55` : undefined,
+                    opacity: dimmed ? 0.55 : 1,
+                    transform: isActive ? 'translateY(-2px)' : undefined,
+                    transition: 'box-shadow 200ms ease, opacity 200ms ease, transform 200ms ease, border-color 200ms ease',
+                  }}
                 >
                   <div
                     className="px-3 py-2.5 border-b border-border"
@@ -1192,19 +1294,35 @@ export default function Prospects() {
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className={`flex-1 p-2 space-y-2 transition-colors ${
-                          snapshot.isDraggingOver ? 'bg-[#378ADD]/5' : ''
-                        }`}
-                        style={{ minHeight: 80 }}
+                        className="flex-1 p-2 space-y-2"
+                        style={{
+                          minHeight: 80,
+                          backgroundColor: snapshot.isDraggingOver ? `${stage.accent}14` : 'transparent',
+                          transition: 'background-color 180ms ease',
+                        }}
                       >
                         {cards.map((p, i) => (
-                          <KanbanCard key={p.id} p={p} index={i} onEdit={openEdit} />
+                          <KanbanCard
+                            key={p.id}
+                            p={p}
+                            index={i}
+                            onEdit={openEdit}
+                            accent={stage.accent}
+                          />
                         ))}
                         {provided.placeholder}
-                        {cards.length === 0 && !snapshot.isDraggingOver && (
+                        {cards.length === 0 && !snapshot.isDraggingOver && !isSource && (
                           <p className="text-xs text-muted-foreground text-center py-4 opacity-50">
                             Glissez ici
                           </p>
+                        )}
+                        {snapshot.isDraggingOver && cards.length === 0 && (
+                          <div
+                            className="border-2 border-dashed rounded-lg py-6 text-center text-xs font-medium"
+                            style={{ borderColor: stage.accent, color: stage.accent }}
+                          >
+                            Déposer ici
+                          </div>
                         )}
                       </div>
                     )}

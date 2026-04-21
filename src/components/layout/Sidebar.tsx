@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Users, UserCheck, FileText, Receipt, FileSignature,
   CreditCard, DollarSign, TrendingUp, Globe, Server, Package, ShoppingCart,
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
-  Bot, CalendarDays,
+  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -31,50 +31,53 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: 'Commercial',
     items: [
-      { label: 'Devis',              href: '/devis',        icon: FileText },
-      { label: 'Factures',           href: '/factures',     icon: Receipt },
-      { label: 'Contrats',           href: '/contrats',     icon: FileSignature },
-      { label: 'Bons de commande',   href: '/bons-commande',icon: ShoppingCart },
-      { label: 'Produits & Services',href: '/produits',     icon: Package },
+      { label: 'Devis',               href: '/devis',        icon: FileText },
+      { label: 'Factures',            href: '/factures',     icon: Receipt },
+      { label: 'Contrats',            href: '/contrats',     icon: FileSignature },
+      { label: 'Bons de commande',    href: '/bons-commande',icon: ShoppingCart },
+      { label: 'Produits & Services', href: '/produits',     icon: Package },
     ],
   },
   {
     title: 'Finance',
     items: [
-      { label: 'Paiements',     href: '/paiements',    icon: CreditCard },
-      { label: 'Chèques reçus', href: '/cheques-recus',icon: Banknote },
-      { label: 'Chèques émis',  href: '/cheques-emis', icon: Wallet },
-      { label: 'Dépenses',      href: '/depenses',     icon: DollarSign },
-      { label: 'Finances',      href: '/finances',     icon: TrendingUp },
-      { label: 'Abonnements',   href: '/abonnements',  icon: Repeat },
+      { label: 'Paiements',      href: '/paiements',    icon: CreditCard },
+      { label: 'Chèques reçus',  href: '/cheques-recus',icon: Banknote },
+      { label: 'Chèques émis',   href: '/cheques-emis', icon: Wallet },
+      { label: 'Dépenses',       href: '/depenses',     icon: DollarSign },
+      { label: 'Finances',       href: '/finances',     icon: TrendingUp },
+      { label: 'Abonnements',         href: '/abonnements',         icon: Repeat },
+      { label: 'Abonnements Clients', href: '/abonnements-clients',  icon: RefreshCcw, badge: 'MRR' },
     ],
   },
   {
     title: 'Ressources',
     items: [
-      { label: 'Équipe',       href: '/equipe',       icon: Briefcase },
-      { label: 'Fournisseurs', href: '/fournisseurs', icon: Building2 },
-      { label: 'Domaines',     href: '/domaines',     icon: Globe },
-      { label: 'Hébergements', href: '/hebergements', icon: Server },
+      { label: 'Équipe',        href: '/equipe',       icon: Briefcase },
+      { label: 'Fournisseurs',  href: '/fournisseurs', icon: Building2 },
+      { label: 'Domaines',      href: '/domaines',     icon: Globe },
+      { label: 'Hébergements',  href: '/hebergements', icon: Server },
     ],
   },
   {
     title: 'Analyse',
     items: [
-      { label: 'Statistiques',      href: '/statistiques',  icon: BarChart3 },
-      { label: "Journal d'activité",href: '/activite',      icon: Activity },
-      { label: 'Conseiller IA',     href: '/conseiller-ia', icon: Bot, badge: 'IA' },
+      { label: 'Statistiques',       href: '/statistiques',  icon: BarChart3 },
+      { label: "Journal d'activité", href: '/activite',      icon: Activity },
+      { label: 'Conseiller IA',      href: '/conseiller-ia',    icon: Bot,     badge: 'IA'   },
+      { label: 'Automatisations',    href: '/automatisations',  icon: Zap,     badge: 'Auto' },
+      { label: 'Intégrations',       href: '/integrations',     icon: PlugZap },
+      { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown },
     ],
   },
 ]
 
-// Persist which groups are expanded
 function getInitialExpanded(): string[] {
   try {
     const stored = localStorage.getItem('sidebar-expanded-groups')
     if (stored) return JSON.parse(stored)
   } catch {}
-  return NAV_GROUPS.map(g => g.title) // all open by default
+  return NAV_GROUPS.map(g => g.title)
 }
 
 interface SidebarProps {
@@ -83,7 +86,9 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
-  const location = useLocation()
+  const location       = useLocation()
+  const { tenantSlug } = useParams<{ tenantSlug: string }>()
+  const base           = tenantSlug ? `/${tenantSlug}` : ''
   const [expandedGroups, setExpandedGroups] = useState<string[]>(getInitialExpanded)
 
   const toggleGroup = (title: string) => {
@@ -100,48 +105,51 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       className={cn(
         'fixed left-0 top-0 h-screen z-40 flex flex-col transition-all duration-300',
-        'border-r',
-        // Dark mode — brand dark
-        'dark:bg-[#020617] dark:border-slate-800/80',
-        // Light mode — spec: #F8F9FA bg, #E2E8F0 border
-        'light:bg-[#F8F9FA] light:border-[#E2E8F0]',
-        collapsed ? 'w-16' : 'w-64'
+        'border-r border-slate-200/80 dark:border-slate-800/60',
+        'bg-white dark:bg-[#060d1c]',
+        collapsed ? 'w-16' : 'w-64',
       )}
     >
       {/* ── Logo ── */}
       <div className={cn(
-        'flex items-center h-16 px-4 flex-shrink-0 border-b',
-        'dark:border-slate-800/80 light:border-[#E2E8F0]',
-        collapsed ? 'justify-center' : 'justify-between'
+        'flex items-center h-16 px-4 flex-shrink-0 border-b border-slate-100 dark:border-slate-800/60',
+        collapsed ? 'justify-center' : 'justify-between',
       )}>
         {!collapsed && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-2.5 min-w-0"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#3a526b] flex items-center justify-center flex-shrink-0 shadow-sm">
-              <span className="text-white font-bold text-sm">N</span>
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
+            >
+              <span className="text-white font-black text-[15px] tracking-tight">G</span>
             </div>
-            <span className="font-semibold text-base tracking-tight truncate dark:text-white light:text-[#1e293b]">
-              NextGital
-            </span>
+            <div className="min-w-0">
+              <p className="font-extrabold text-[15px] tracking-tight text-slate-900 dark:text-white leading-none">GestiQ</p>
+              <p className="text-[10px] font-semibold leading-none mt-1" style={{ background: 'linear-gradient(90deg, #2563EB, #7C3AED)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                CRM & Gestion
+              </p>
+            </div>
           </motion.div>
         )}
+
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-[#3a526b] flex items-center justify-center shadow-sm">
-            <span className="text-white font-bold text-sm">N</span>
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
+          >
+            <span className="text-white font-black text-[15px]">G</span>
           </div>
         )}
+
         {!collapsed && (
           <button
             onClick={onToggle}
-            className={cn(
-              'p-1.5 rounded-lg transition-colors flex-shrink-0',
-              'dark:text-slate-500 dark:hover:text-white dark:hover:bg-slate-800',
-              'light:text-[#888780] light:hover:text-[#444441] light:hover:bg-[#E2E8F0]'
-            )}
-            title="Réduire le menu"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-white transition-colors flex-shrink-0"
+            title="Réduire"
           >
             <X className="w-4 h-4" />
           </button>
@@ -149,25 +157,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* ── Navigation ── */}
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto py-4 px-2.5 space-y-0.5">
         {NAV_GROUPS.map(group => (
-          <div key={group.title} className="mb-1">
-            {/* Section header */}
+          <div key={group.title} className="mb-2">
+
+            {/* Section label */}
             {!collapsed && (
               <button
                 onClick={() => toggleGroup(group.title)}
-                className={cn(
-                  'w-full flex items-center justify-between px-2 py-1.5 mb-0.5',
-                  'text-[11px] font-semibold uppercase tracking-[0.08em]',
-                  'transition-colors duration-150 select-none rounded',
-                  'dark:text-slate-500 dark:hover:text-slate-300',
-                  'light:text-[#5F5E5A] light:hover:text-[#2C2C2A] light:hover:bg-[#E2E8F0]'
-                )}
+                className="w-full flex items-center justify-between px-2 py-1 mb-1
+                           text-[10px] font-bold uppercase tracking-[0.12em]
+                           text-slate-400 dark:text-slate-600
+                           hover:text-blue-500 dark:hover:text-slate-400
+                           transition-colors duration-150 rounded select-none"
               >
                 {group.title}
                 <motion.span
                   animate={{ rotate: expandedGroups.includes(group.title) ? 0 : -90 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.18 }}
                 >
                   <ChevronDown className="w-3 h-3" />
                 </motion.span>
@@ -180,34 +187,63 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
-                  className="overflow-hidden"
+                  transition={{ duration: 0.18, ease: 'easeInOut' }}
+                  className="overflow-hidden space-y-0.5"
                 >
                   {group.items.map(item => {
+                    const fullHref = item.href === '/' ? base || '/' : `${base}${item.href}`
                     const isActive = item.href === '/'
-                      ? location.pathname === '/'
-                      : location.pathname.startsWith(item.href)
+                      ? location.pathname === base || location.pathname === base + '/'
+                      : location.pathname.startsWith(`${base}${item.href}`)
+
                     return (
                       <NavLink
                         key={item.href}
-                        to={item.href}
+                        to={fullHref}
+                        title={collapsed ? item.label : undefined}
                         className={cn(
                           'sidebar-item',
                           isActive && 'active',
-                          collapsed && 'justify-center px-0'
+                          collapsed && 'justify-center px-0',
                         )}
-                        title={collapsed ? item.label : undefined}
                       >
-                        <item.icon className={cn('flex-shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} />
+                        <item.icon
+                          className={cn(
+                            'sidebar-icon-el flex-shrink-0 transition-colors',
+                            collapsed ? 'w-5 h-5' : 'w-4 h-4',
+                          )}
+                        />
                         {!collapsed && (
                           <>
                             <span className="flex-1 truncate">{item.label}</span>
                             {item.badge === 'IA' && (
-                              <span
-                                className="px-1.5 py-0.5 rounded text-[10px] font-bold leading-none bg-[#EEEDFE] text-[#3C3489] border border-[#A79FF4] dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-700/50"
-                                title="Powered by AI"
-                              >
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-violet-50 text-violet-600 border border-violet-200 dark:bg-violet-950/50 dark:text-violet-300 dark:border-violet-800/50'
+                              )}>
                                 IA ✦
+                              </span>
+                            )}
+                            {item.badge === 'MRR' && (
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800/50'
+                              )}>
+                                MRR
+                              </span>
+                            )}
+                            {item.badge === 'Auto' && (
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800/50'
+                              )}>
+                                Auto
                               </span>
                             )}
                           </>
@@ -223,16 +259,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* ── Footer ── */}
-      <div className={cn(
-        'border-t p-2 flex-shrink-0',
-        'dark:border-slate-800/80 light:border-[#E2E8F0]'
-      )}>
+      <div className="border-t border-slate-100 dark:border-slate-800/60 p-2.5 flex-shrink-0">
         <NavLink
           to="/parametres"
-          className={cn('sidebar-item', collapsed && 'justify-center px-0')}
+          className={cn('sidebar-item', location.pathname === '/parametres' && 'active', collapsed && 'justify-center px-0')}
           title={collapsed ? 'Paramètres' : undefined}
         >
-          <Settings className={cn('flex-shrink-0', collapsed ? 'w-5 h-5' : 'w-4 h-4')} />
+          <Settings className={cn(
+            'sidebar-icon-el flex-shrink-0',
+            collapsed ? 'w-5 h-5' : 'w-4 h-4',
+          )} />
           {!collapsed && <span>Paramètres</span>}
         </NavLink>
       </div>

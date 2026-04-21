@@ -5,12 +5,13 @@ import {
   Plus, Search, Download, FileText, Loader2, Edit2, Trash2,
   ChevronRight, ChevronLeft, Check, Building2, Phone, Mail,
   MapPin, X, ToggleLeft, ToggleRight, PenLine, AlertTriangle, Eye,
-  AlignLeft, List as ListIcon,
+  AlignLeft, List as ListIcon, Receipt,
   Bold, Italic, Underline, AlignCenter, AlignRight,
   ListOrdered, IndentIncrease, IndentDecrease, Eraser, Strikethrough,
 } from 'lucide-react'
 import { useDevis, useCreateDevis, useUpdateDevis, useDeleteDevis, type Devis } from '@/hooks/useDevis'
 import { useClients, useCreateClient, type Client } from '@/hooks/useClients'
+import { useCreateFacture } from '@/hooks/useFactures'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Badge }   from '@/components/ui/badge'
@@ -21,6 +22,11 @@ import { toast } from 'sonner'
 import { generateDevisPDFWithRetry } from '@/lib/generateDevisPDF'
 import DevisTemplate from '@/components/devis/DevisTemplate'
 import DevisActions  from '@/components/devis/DevisActions'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { devisSchema } from '@/lib/importExportSchemas'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 
 /* ─── Types ───────────────────────────────────────────────────────── */
 export type BlockType = 'title' | 'paragraph' | 'list'
@@ -79,11 +85,11 @@ function parseDevisNotes(notes: string | null): DevisNotesData {
 
 /* ─── Statut config ───────────────────────────────────────────────── */
 const STATUT_CONFIG = {
-  brouillon: { label: 'Brouillon', color: 'text-muted-foreground', bg: 'bg-muted'            },
-  envoye:    { label: 'Envoyé',    color: 'text-blue-400',         bg: 'bg-blue-500/15'      },
-  accepte:   { label: 'Accepté',   color: 'text-emerald-400',      bg: 'bg-emerald-500/15'   },
-  refuse:    { label: 'Refusé',    color: 'text-red-400',          bg: 'bg-red-500/15'       },
-  expire:    { label: 'Expiré',    color: 'text-amber-400',        bg: 'bg-amber-500/15'     },
+  brouillon: { label: 'Brouillon', color: 'text-muted-foreground',                    bg: 'bg-muted'                              },
+  envoye:    { label: 'Envoyé',    color: 'text-blue-600 dark:text-blue-400',          bg: 'bg-blue-50 dark:bg-blue-500/15'        },
+  accepte:   { label: 'Accepté',   color: 'text-emerald-600 dark:text-emerald-400',    bg: 'bg-emerald-50 dark:bg-emerald-500/15'  },
+  refuse:    { label: 'Refusé',    color: 'text-red-600 dark:text-red-400',            bg: 'bg-red-50 dark:bg-red-500/15'          },
+  expire:    { label: 'Expiré',    color: 'text-amber-600 dark:text-amber-400',        bg: 'bg-amber-50 dark:bg-amber-500/15'      },
 }
 
 /* ─── Step indicator ──────────────────────────────────────────────── */
@@ -100,7 +106,7 @@ function StepBar({ step }: { step: number }) {
             <div className="flex items-center gap-2">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                 done ? 'bg-emerald-500 text-white' :
-                cur  ? 'bg-[#378ADD] text-white ring-4 ring-[#378ADD]/20' :
+                cur  ? 'bg-blue-600 text-white ring-4 ring-blue-600/20' :
                        'bg-muted text-muted-foreground'
               }`}>
                 {done ? <Check className="w-3.5 h-3.5" /> : n}
@@ -143,7 +149,7 @@ export function DescriptionPreview({
             <ul className="space-y-0.5">
               {b.content.split('\n').filter(Boolean).map((item, i) => (
                 <li key={i} className={`flex items-start gap-2 text-muted-foreground ${compact ? 'text-[11px]' : 'text-sm'}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#378ADD] flex-shrink-0 mt-1.5" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 flex-shrink-0 mt-1.5" />
                   {item}
                 </li>
               ))}
@@ -251,7 +257,7 @@ function DescriptionEditor({
   ]
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden focus-within:border-[#378ADD]/60 focus-within:ring-1 focus-within:ring-[#378ADD]/20 transition-colors">
+    <div className="rounded-lg border border-border overflow-hidden focus-within:border-blue-600/60 focus-within:ring-1 focus-within:ring-blue-600/20 transition-colors">
       {/* Toolbar */}
       <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 bg-muted/30 border-b border-border">
         {groups.map((group, gi) => (
@@ -267,7 +273,7 @@ function DescriptionEditor({
                   title={title}
                   className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                     active
-                      ? 'bg-[#378ADD]/20 text-[#378ADD] ring-1 ring-[#378ADD]/30'
+                      ? 'bg-blue-600/20 text-blue-600 dark:text-blue-400 ring-1 ring-blue-600/30'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   }`}
                 >
@@ -351,7 +357,7 @@ function PrestationRow({
           <div className="flex items-center gap-1.5 mb-1">
             <button
               type="button"
-              onClick={() => onChange(p.id, 'showQuantite' as keyof Prestation, !showQty)}
+              onClick={() => onChange(p.id, 'showQuantite' as keyof Prestation, !showQty as unknown as string)}
               className={`relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                 showQty ? 'bg-[#1e64c4]' : 'bg-slate-300 dark:bg-slate-600'
               }`}
@@ -375,7 +381,7 @@ function PrestationRow({
           <div className="flex items-center gap-1.5 mb-1">
             <button
               type="button"
-              onClick={() => onChange(p.id, 'showPrixUnit' as keyof Prestation, !showPrix)}
+              onClick={() => onChange(p.id, 'showPrixUnit' as keyof Prestation, !showPrix as unknown as string)}
               className={`relative inline-flex h-4 w-7 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
                 showPrix ? 'bg-[#1e64c4]' : 'bg-slate-300 dark:bg-slate-600'
               }`}
@@ -749,7 +755,7 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
                 </AnimatePresence>
                 <button
                   onClick={addPrestation}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 text-xs text-slate-400 hover:border-[#378ADD]/50 hover:text-[#378ADD] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 text-xs text-slate-400 hover:border-blue-600/50 hover:text-blue-600 dark:text-blue-400 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Ajouter une prestation
                 </button>
@@ -772,7 +778,7 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
                     )}
                     <button onClick={() => setTvaEnabled(v => !v)}>
                       {tvaEnabled
-                        ? <ToggleRight className="w-7 h-7 text-[#378ADD]" />
+                        ? <ToggleRight className="w-7 h-7 text-blue-600 dark:text-blue-400" />
                         : <ToggleLeft  className="w-7 h-7 text-slate-400" />}
                     </button>
                   </div>
@@ -950,8 +956,8 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="rounded-xl border border-[#378ADD]/30 bg-[#378ADD]/5 p-4 space-y-3">
-                    <p className="text-xs font-bold text-[#378ADD]">Nouveau client</p>
+                  <div className="rounded-xl border border-blue-600/30 bg-blue-600/5 p-4 space-y-3">
+                    <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Nouveau client</p>
                     <div className="grid grid-cols-2 gap-3">
                       <Input placeholder="Nom *" value={newClientForm.nom}
                         onChange={e => setNewClientForm(p => ({ ...p, nom: e.target.value }))} className="text-sm" />
@@ -982,12 +988,12 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
                   onClick={() => setSelectedId(c.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
                     selectedId === c.id
-                      ? 'bg-[#378ADD]/10 text-foreground'
+                      ? 'bg-blue-600/10 text-foreground'
                       : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                    selectedId === c.id ? 'bg-[#378ADD] text-white' : 'bg-muted'
+                    selectedId === c.id ? 'bg-blue-600 text-white' : 'bg-muted'
                   }`}>
                     {getInitials(c.nom)}
                   </div>
@@ -998,7 +1004,7 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
                     </p>
                     <p className="text-xs text-muted-foreground truncate">{c.nom}</p>
                   </div>
-                  {selectedId === c.id && <Check className="w-4 h-4 text-[#378ADD] flex-shrink-0" />}
+                  {selectedId === c.id && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
                 </button>
               ))}
               {filteredClients.length === 0 && (
@@ -1011,10 +1017,10 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl border border-[#378ADD]/30 bg-[#378ADD]/5 p-4"
+                className="rounded-xl border border-blue-600/30 bg-blue-600/5 p-4"
               >
                 <div className="mb-3">
-                  <p className="text-xs font-bold text-[#378ADD] uppercase tracking-wide">Informations du client</p>
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Informations du client</p>
                 </div>
                 <p className="text-sm font-semibold text-foreground">{client.entreprise ?? client.nom}</p>
                 {client.telephone && (
@@ -1154,9 +1160,9 @@ function DevisPreviewModal({ devis: d, client, onClose }: { devis: Devis; client
                 <div className="px-5 py-5 border-b border-white/10 space-y-2">
                   <p className="text-[#00A2FF] text-[9px] font-bold uppercase tracking-widest mb-2">Contact</p>
                   {[
-                    { icon: '✉', v: 'info@nextgital.com' },
+                    { icon: '✉', v: 'info@gestiq.com' },
                     { icon: '✆', v: '+212 620002066'    },
-                    { icon: '⌂', v: 'www.nextgital.com' },
+                    { icon: '⌂', v: 'www.gestiq.com' },
                   ].map(({ icon, v }) => (
                     <div key={v} className="flex gap-2 items-start">
                       <span className="text-slate-400 text-[9px] mt-0.5 w-3">{icon}</span>
@@ -1366,12 +1372,39 @@ function DevisPreviewModal({ devis: d, client, onClose }: { devis: Devis; client
 
 /* ─── Main DevisPage ──────────────────────────────────────────────── */
 export default function DevisPage() {
-  const navigate    = useNavigate()
+  const navigate      = useNavigate()
   const { data: devis = [], isLoading } = useDevis()
-  const deleteDevis  = useDeleteDevis()
-  const updateDevis  = useUpdateDevis()
+  const createDevis    = useCreateDevis()
+  const deleteDevis    = useDeleteDevis()
+  const updateDevis    = useUpdateDevis()
+  const createFacture  = useCreateFacture()
+
+  const convertToFacture = async (d: Devis) => {
+    try {
+      const today   = new Date().toISOString().slice(0, 10)
+      const echeance = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
+      const nextNum  = `FAC-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+      await createFacture.mutateAsync({
+        numero:        nextNum,
+        client_id:     d.client_id,
+        statut:        'impayee',
+        date_emission: today,
+        date_echeance: echeance,
+        montant_ht:    d.montant_ht,
+        tva:           d.tva,
+        montant_ttc:   d.montant_ttc,
+        montant_paye:  0,
+        notes:         `Généré depuis le devis ${d.numero}`,
+      } as any)
+      toast.success(`Facture créée depuis ${d.numero}`)
+      navigate('/factures')
+    } catch {
+      toast.error('Erreur lors de la conversion')
+    }
+  }
   const [search,       setSearch]       = useState('')
   const [filterStatut, setFilterStatut] = useState('all')
+  const [dateRange,    setDateRange]    = useState<DateRange>(DEFAULT_RANGE)
   const [wizardOpen,   setWizardOpen]   = useState(false)
   const [wizardStep,   setWizardStep]   = useState(1)
   const [editing,      setEditing]      = useState<Devis | undefined>()
@@ -1380,13 +1413,15 @@ export default function DevisPage() {
   const [statusConfirm, setStatusConfirm] = useState<{ devis: Devis; newStatut: Devis['statut'] } | null>(null)
   const { data: clients = [] } = useClients()
 
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
   const filtered = useMemo(() =>
     devis.filter(d => {
       const matchSearch = !search || [d.numero, d.client_nom].some(f => f?.toLowerCase().includes(search.toLowerCase()))
       const matchStatut = filterStatut === 'all' || d.statut === filterStatut
-      return matchSearch && matchStatut
+      const matchDate   = dateMatch(d.date_emission)
+      return matchSearch && matchStatut && matchDate
     })
-  , [devis, search, filterStatut])
+  , [devis, search, filterStatut, dateMatch])
 
   /* ── Stats: all three as monetary amounts (cohérence dashboard) ── */
   const stats = useMemo(() => ({
@@ -1406,23 +1441,35 @@ export default function DevisPage() {
           <h1 className="page-title">Devis</h1>
           <p className="text-muted-foreground text-sm mt-1">{devis.length} devis · {formatCurrency(stats.total)} total</p>
         </div>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="w-4 h-4" /> Nouveau devis
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={devisSchema}
+            data={devis}
+            onImport={async (row) => { await createDevis.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={openNew}>
+            <Plus className="w-4 h-4" /> Nouveau devis
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Total pipeline', value: formatCurrency(stats.total),     color: 'text-foreground'  },
-          { label: 'Acceptés',       value: formatCurrency(stats.acceptes),  color: 'text-emerald-400' },
-          { label: 'En attente',     value: formatCurrency(stats.enAttente), color: 'text-amber-400'   },
+          { label: 'Total pipeline', value: formatCurrency(stats.total),     color: 'text-foreground' },
+          { label: 'Acceptés',       value: formatCurrency(stats.acceptes),  color: 'text-emerald-600 dark:text-emerald-400' },
+          { label: 'En attente',     value: formatCurrency(stats.enAttente), color: 'text-amber-600 dark:text-amber-400'   },
         ].map(s => (
-          <div key={s.label} className="card p-4">
+          <div key={s.label} className="card-premium p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{s.label}</p>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Date filter */}
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       {/* Filters */}
@@ -1441,30 +1488,28 @@ export default function DevisPage() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card-premium overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/30">
+              <tr className="table-header">
                 {['N° Devis', 'Client', 'Émission', 'Expiration', 'Montant TTC', 'Statut', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    {h}
-                  </th>
+                  <th key={h}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-400 mx-auto" /></td></tr>
+                <tr><td colSpan={7} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-600 dark:text-blue-400 mx-auto" /></td></tr>
               ) : filtered.map(d => {
                 const s = STATUT_CONFIG[d.statut]
                 return (
-                  <tr key={d.id} className="border-b border-border hover:bg-muted/30 transition-colors group">
-                    <td className="px-4 py-3 font-mono font-medium text-foreground">{d.numero}</td>
-                    <td className="px-4 py-3 text-foreground">{d.client_nom || '—'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDate(d.date_emission)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{d.date_expiration ? formatDate(d.date_expiration) : '—'}</td>
-                    <td className="px-4 py-3 font-semibold text-foreground">{formatCurrency(d.montant_ttc)}</td>
+                  <tr key={d.id} className="table-row group">
+                    <td className="font-mono font-medium text-foreground">{d.numero}</td>
+                    <td className="text-foreground">{d.client_nom || '—'}</td>
+                    <td className="text-muted-foreground">{formatDate(d.date_emission)}</td>
+                    <td className="text-muted-foreground">{d.date_expiration ? formatDate(d.date_expiration) : '—'}</td>
+                    <td className="font-semibold text-foreground">{formatCurrency(d.montant_ttc)}</td>
                     <td className="px-4 py-3">
                       <Select
                         value={d.statut}
@@ -1492,7 +1537,7 @@ export default function DevisPage() {
                         {/* Always-visible: Aperçu + Modifier */}
                         <button
                           onClick={() => navigate(`/devis/${d.id}/preview`)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-[#378ADD] hover:bg-[#378ADD]/10 transition-colors"
+                          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-600/10 transition-colors"
                           title="Aperçu & impression"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -1507,8 +1552,18 @@ export default function DevisPage() {
                           Modifier
                         </button>
 
-                        {/* Hidden-until-hover: PDF, delete */}
+                        {/* Hidden-until-hover: convert, PDF, delete */}
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {d.statut === 'accepte' && (
+                            <Button
+                              variant="ghost" size="icon" className="w-7 h-7 text-emerald-500 hover:text-emerald-600"
+                              onClick={() => convertToFacture(d)}
+                              title="Convertir en Facture"
+                              disabled={createFacture.isPending}
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => generateDevisPDFWithRetry(d, clients.find(c => c.id === d.client_id)).catch(console.error)} title="Télécharger PDF">
                             <Download className="w-3.5 h-3.5" />
                           </Button>

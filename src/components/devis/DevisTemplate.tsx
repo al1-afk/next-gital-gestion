@@ -80,8 +80,8 @@ const CO = {
   addr2:   'Oujda, Maroc',
   tel:     '+212 620002066',
   fax:     '0536683707',
-  email:   'info@nextgital.com',
-  web:     'www.nextgital.com',
+  email:   'info@gestiq.com',
+  web:     'www.gestiq.com',
   rc:      '42415',
   if_:     '60270023',
   patente: '10301120',
@@ -169,7 +169,7 @@ const DevisTemplate = forwardRef<HTMLDivElement, DevisTemplateProps>(
           {/* Left: logo + name */}
           <div className="flex items-center gap-3">
             <img
-              src="/logo-nextgital.png"
+              src="/logo-gestiq.png"
               alt="NEXT GITAL"
               className="w-16 h-16 object-contain"
               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}

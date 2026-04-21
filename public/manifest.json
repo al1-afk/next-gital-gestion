@@ -1,0 +1,32 @@
+{
+  "name": "GestiQ — CRM & Gestion",
+  "short_name": "GestiQ",
+  "description": "Plateforme SaaS de gestion d'entreprise : CRM, facturation, devis, finances et automatisations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060d1c",
+  "theme_color": "#2563EB",
+  "orientation": "portrait-primary",
+  "lang": "fr",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Tableau de bord", "url": "/",          "description": "Vue générale" },
+    { "name": "Factures",        "url": "/factures",   "description": "Gérer les factures" },
+    { "name": "Prospects",       "url": "/prospects",  "description": "CRM & Prospects" },
+    { "name": "Tâches",          "url": "/taches",     "description": "Mes tâches" }
+  ]
+}

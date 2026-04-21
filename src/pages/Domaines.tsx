@@ -1,111 +1,136 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { Plus, Globe, AlertTriangle, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Globe, AlertTriangle, CheckCircle2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { formatCurrency, formatDate, getDaysUntil } from '@/lib/utils'
+import { domainesApi } from '@/lib/api'
 import { toast } from 'sonner'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { domainesSchema } from '@/lib/importExportSchemas'
+import {
+  DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
+} from '@/components/ui/DateRangeFilter'
 
-interface Domaine {
-  id: string; nom: string; registrar: string; date_expiration: string
-  prix_renouvellement: number; client?: string; notes?: string
-}
+interface Domaine { id: string; created_at: string; nom: string; registrar: string; date_expiration: string; prix_renouvellement: number; client?: string; notes?: string }
 
-const MOCK: Domaine[] = [
-  { id: '1', nom: 'nextgital.ma', registrar: 'MarkDomain', date_expiration: '2026-05-15', prix_renouvellement: 120, client: 'NextGital' },
-  { id: '2', nom: 'nextgital.com', registrar: 'GoDaddy', date_expiration: '2026-06-01', prix_renouvellement: 150, client: 'NextGital' },
-  { id: '3', nom: 'hotelAtlas.ma', registrar: 'MarkDomain', date_expiration: '2026-07-20', prix_renouvellement: 120, client: 'Hôtel Atlas' },
-  { id: '4', nom: 'pharmaTech.ma', registrar: 'Gandi', date_expiration: '2026-08-10', prix_renouvellement: 130, client: 'PharmaTech' },
-  { id: '5', nom: 'immo-premium.ma', registrar: 'MarkDomain', date_expiration: '2026-09-15', prix_renouvellement: 120, client: 'Immobilier Premium' },
-]
+const EMPTY = { nom: '', registrar: '', date_expiration: '', prix_renouvellement: 120, client: '', notes: '' }
 
-function getUrgencyBadge(days: number) {
-  if (days <= 0) return <Badge variant="destructive">Expiré</Badge>
-  if (days <= 15) return <Badge variant="destructive">{days}j restants</Badge>
-  if (days <= 30) return <Badge variant="warning">{days}j restants</Badge>
-  if (days <= 60) return <Badge variant="default">{days}j restants</Badge>
-  return <Badge variant="success">{days}j restants</Badge>
+function UrgencyBadge({ days }: { days: number }) {
+  if (days <= 0)  return <span className="badge-pill badge-danger">Expiré</span>
+  if (days <= 15) return <span className="badge-pill badge-danger">{days}j</span>
+  if (days <= 30) return <span className="badge-pill badge-warning">{days}j</span>
+  if (days <= 60) return <span className="badge-pill badge-info">{days}j</span>
+  return <span className="badge-pill badge-success">{days}j</span>
 }
 
 export default function Domaines() {
-  const [domaines, setDomaines] = useState(MOCK)
+  const qc = useQueryClient()
+  const { data: domaines = [], isLoading } = useQuery<Domaine[]>({
+    queryKey: ['domaines'],
+    queryFn: () => domainesApi.list({ orderBy: 'date_expiration', order: 'asc' }) as Promise<Domaine[]>,
+  })
+
+  const create = useMutation({
+    mutationFn: (data: typeof EMPTY) => domainesApi.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['domaines'] }); toast.success('Domaine ajouté'); setShowForm(false); setForm(EMPTY) },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+  const remove = useMutation({
+    mutationFn: (id: string) => domainesApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['domaines'] }); toast.success('Supprimé') },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ nom: '', registrar: '', date_expiration: '', prix_renouvellement: 120, client: '', notes: '' })
+  const [form, setForm] = useState(EMPTY)
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_RANGE)
 
-  const sorted = [...domaines].sort((a, b) => getDaysUntil(a.date_expiration) - getDaysUntil(b.date_expiration))
-
-  const add = () => {
-    if (!form.nom) return
-    setDomaines(prev => [{ ...form, id: Date.now().toString() }, ...prev])
-    setShowForm(false)
-    toast.success('Domaine ajouté')
-  }
+  const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
+  const filteredDomaines = useMemo(
+    () => domaines.filter(d => dateMatch(d.date_expiration)),
+    [domaines, dateMatch]
+  )
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Domaines</h1>
-          <p className="text-muted-foreground text-sm mt-1">{domaines.length} domaines gérés</p>
+          <p className="text-muted-foreground text-sm mt-1">{filteredDomaines.length} domaines gérés</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Ajouter</Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={domainesSchema}
+            data={domaines}
+            onImport={async (row) => { await create.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Ajouter</Button>
+        </div>
+      </div>
+
+      <div className="card-premium p-3">
+        <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4">
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Total domaines</p>
-          <p className="text-xl font-bold text-foreground">{domaines.length}</p>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-foreground">{filteredDomaines.length}</p><p className="text-xs text-muted-foreground mt-0.5">Total domaines</p></div>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Expirent dans 30j</p>
-          <p className="text-xl font-bold text-yellow-400">{domaines.filter(d => getDaysUntil(d.date_expiration) <= 30).length}</p>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-amber-600 dark:text-amber-400">{filteredDomaines.filter(d => getDaysUntil(d.date_expiration) <= 30).length}</p><p className="text-xs text-muted-foreground mt-0.5">Expirent dans 30j</p></div>
         </div>
-        <div className="card p-4">
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider">Budget renouvellements</p>
-          <p className="text-xl font-bold text-blue-400">{formatCurrency(domaines.reduce((s, d) => s + d.prix_renouvellement, 0))}</p>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(filteredDomaines.reduce((s, d) => s + d.prix_renouvellement, 0))}</p><p className="text-xs text-muted-foreground mt-0.5">Budget renouvellements</p></div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {sorted.map((d, i) => {
-          const days = getDaysUntil(d.date_expiration)
-          return (
-            <motion.div
-              key={d.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className={`card p-4 hover:border-blue-500/30 transition-all group ${days <= 30 ? 'border-yellow-500/30' : days <= 15 ? 'border-red-500/30' : ''}`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Globe className="w-4 h-4 text-blue-400" />
+      {isLoading ? <div className="text-center text-muted-foreground text-sm py-10">Chargement...</div> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredDomaines.map((d, i) => {
+            const days = getDaysUntil(d.date_expiration)
+            return (
+              <motion.div key={d.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                className={`card-premium p-4 hover:border-blue-500/30 transition-all group ${days <= 30 ? 'border-yellow-500/30' : ''}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground text-sm">{d.nom}</p>
+                      <p className="text-xs text-muted-foreground">{d.registrar}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground text-sm">{d.nom}</p>
-                    <p className="text-xs text-muted-foreground">{d.registrar}</p>
-                  </div>
+                  <UrgencyBadge days={days} />
                 </div>
-                {getUrgencyBadge(days)}
-              </div>
-              <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Expiration</span><span className="text-foreground">{formatDate(d.date_expiration)}</span></div>
-                <div className="flex justify-between"><span>Renouvellement</span><span className="text-blue-400 font-medium">{formatCurrency(d.prix_renouvellement)}</span></div>
-                {d.client && <div className="flex justify-between"><span>Client</span><span className="text-muted-foreground">{d.client}</span></div>}
-              </div>
-              <div className="mt-3 pt-2 border-t border-border flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="icon" className="w-7 h-7 text-red-400"
-                  onClick={() => { setDomaines(prev => prev.filter(x => x.id !== d.id)); toast.success('Domaine supprimé') }}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
+                <div className="mt-3 space-y-1.5 text-xs text-muted-foreground">
+                  <div className="flex justify-between"><span>Expiration</span><span className="text-foreground">{formatDate(d.date_expiration)}</span></div>
+                  <div className="flex justify-between"><span>Renouvellement</span><span className="text-blue-600 dark:text-blue-400 font-medium">{formatCurrency(d.prix_renouvellement)}</span></div>
+                  {d.client && <div className="flex justify-between"><span>Client</span><span>{d.client}</span></div>}
+                </div>
+                <div className="mt-3 pt-2 border-t border-border flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="w-7 h-7 text-red-400" onClick={() => remove.mutate(d.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </motion.div>
+            )
+          })}
+          {filteredDomaines.length === 0 && <div className="col-span-full empty-state"><Globe className="empty-state-icon" /><p className="empty-state-title">Aucun domaine</p></div>}
+        </div>
+      )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
@@ -125,7 +150,9 @@ export default function Domaines() {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button onClick={add}>Ajouter</Button>
+              <Button disabled={create.isPending || !form.nom} onClick={() => create.mutate(form)}>
+                {create.isPending ? 'Ajout...' : 'Ajouter'}
+              </Button>
             </div>
           </div>
         </DialogContent>

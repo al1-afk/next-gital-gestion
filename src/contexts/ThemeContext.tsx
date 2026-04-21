@@ -9,14 +9,14 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
-const STORAGE_KEY = 'nextgital-theme'
+const STORAGE_KEY = 'gestiq-theme'
 
 function getInitialTheme(): Theme {
   try {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null
     if (stored === 'dark' || stored === 'light') return stored
   } catch {}
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return 'light' // default to light (premium blue SaaS design)
 }
 
 function applyTheme(theme: Theme) {

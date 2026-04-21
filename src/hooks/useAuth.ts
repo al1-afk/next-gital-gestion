@@ -1,62 +1,101 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
-import type { User, Session } from '@supabase/supabase-js'
-
-const AUTHORIZED_EMAILS = [
-  'admin@nextgital.com',
-  'owner@nextgital.com',
-]
+import { useNavigate } from 'react-router-dom'
+import { tokenStore, authApi } from '@/lib/api'
 
 interface AuthState {
-  user: User | null
-  session: Session | null
-  loading: boolean
+  loading:      boolean
   isAuthorized: boolean
+  tenantSlug:   string | null
+  tenantId:     string | null
+  userId:       string | null
+  email:        string | null
+  name:         string | null
+  role:         string | null
+}
+
+const INITIAL: AuthState = {
+  loading:      true,
+  isAuthorized: false,
+  tenantSlug:   null,
+  tenantId:     null,
+  userId:       null,
+  email:        null,
+  name:         null,
+  role:         null,
+}
+
+function parseJwt(token: string) {
+  try {
+    return JSON.parse(atob(token.split('.')[1]))
+  } catch {
+    return null
+  }
 }
 
 export function useAuth() {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    session: null,
-    loading: true,
-    isAuthorized: false,
-  })
+  const navigate = useNavigate()
+  const [state, setState] = useState<AuthState>(INITIAL)
 
+  /* On mount: verify existing token */
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const user = session?.user ?? null
-      setState({
-        user,
-        session,
-        loading: false,
-        isAuthorized: user ? AUTHORIZED_EMAILS.includes(user.email ?? '') : false,
+    const token = tokenStore.get()
+    if (!token) {
+      setState({ ...INITIAL, loading: false })
+      return
+    }
+    const payload = parseJwt(token)
+    if (!payload || (payload.exp && payload.exp * 1000 < Date.now())) {
+      tokenStore.clear()
+      setState({ ...INITIAL, loading: false })
+      return
+    }
+    /* Token looks valid — try to confirm with server */
+    authApi.me()
+      .then(me => {
+        setState({
+          loading:      false,
+          isAuthorized: true,
+          tenantSlug:   me.slug,
+          tenantId:     payload.tenantId ?? null,
+          userId:       me.id,
+          email:        me.email,
+          name:         me.name,
+          role:         me.role,
+        })
       })
-    })
-
-    // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const user = session?.user ?? null
-      setState({
-        user,
-        session,
-        loading: false,
-        isAuthorized: user ? AUTHORIZED_EMAILS.includes(user.email ?? '') : false,
+      .catch(() => {
+        tokenStore.clear()
+        setState({ ...INITIAL, loading: false })
       })
-    })
-
-    return () => subscription.unsubscribe()
   }, [])
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+  const signIn = useCallback(async (
+    email:       string,
+    password:    string,
+    tenantSlug?: string,
+  ) => {
+    const data = await authApi.login(email, password, tenantSlug)
+    tokenStore.set(data.token)
+    const payload = parseJwt(data.token)
+    setState({
+      loading:      false,
+      isAuthorized: true,
+      tenantSlug:   data.tenantSlug,
+      tenantId:     data.tenantId,
+      userId:       payload?.sub ?? null,
+      email,
+      name:         null,
+      role:         data.role,
+    })
+    navigate(`/${data.tenantSlug}`, { replace: true })
     return data
-  }, [])
+  }, [navigate])
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut()
-  }, [])
+  const signOut = useCallback(() => {
+    tokenStore.clear()
+    setState({ ...INITIAL, loading: false })
+    navigate('/auth', { replace: true })
+  }, [navigate])
 
   return { ...state, signIn, signOut }
 }

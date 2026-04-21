@@ -1,29 +1,135 @@
 import { useState } from 'react'
-import { Settings, User, Bell, Shield, Database, Globe, Save } from 'lucide-react'
+import { Settings, User, Bell, Shield, Globe, Save, RefreshCcw, Check, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
+
+const LS = {
+  company:  'gestiq_company',
+  activity: 'gestiq_activity',
+  country:  'gestiq_country',
+  currency: 'gestiq_currency',
+  fullname: 'gestiq_fullname',
+  role:     'gestiq_role',
+  onboarding: 'gestiq_onboarding_done',
+}
+
+function get(key: string, fallback = '') {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+
+function save(key: string, val: string) {
+  try { localStorage.setItem(key, val) } catch {}
+}
+
+const ACTIVITIES = ['Agence Web / Digital','Développement Logiciel','Conseil & Formation','Commerce','Immobilier','Santé','Juridique','Autre']
+const COUNTRIES  = ['Maroc','France','Belgique','Canada','Tunisie','Algérie','Sénégal','Autre']
+const CURRENCIES = ['MAD','EUR','USD','XOF','TND']
+const ROLES      = ['Dirigeant / Fondateur','Directeur commercial','Comptable','Manager','Commercial','Assistante']
+
+const NOTIFICATIONS = [
+  { label: 'Renouvellements domaines (30j avant)',   key: 'notif_domains'   },
+  { label: 'Factures impayées (7j après échéance)',  key: 'notif_invoices'  },
+  { label: 'Prospects sans relance (14j)',            key: 'notif_prospects' },
+  { label: 'Rapport mensuel automatique',             key: 'notif_report'    },
+  { label: 'Alertes abonnements',                    key: 'notif_subs'      },
+]
+
+function getNotifState() {
+  const defaults: Record<string, boolean> = {
+    notif_domains: true, notif_invoices: true, notif_prospects: true,
+    notif_report: false, notif_subs: true,
+  }
+  const result: Record<string, boolean> = {}
+  for (const [k, v] of Object.entries(defaults)) {
+    try { result[k] = localStorage.getItem(k) !== null ? localStorage.getItem(k) === 'true' : v }
+    catch { result[k] = v }
+  }
+  return result
+}
 
 export default function Parametres() {
   const [profile, setProfile] = useState({
-    nom: 'NextGital Admin',
-    email: 'admin@nextgital.com',
+    fullname:  get(LS.fullname, 'GestiQ Admin'),
+    role:      get(LS.role,     ''),
+    email:     'admin@gestiq.com',
     telephone: '0661000000',
-    entreprise: 'NextGital Agency',
-    adresse: 'Casablanca, Maroc',
-    devise: 'MAD',
+  })
+
+  const [entreprise, setEntreprise] = useState({
+    company:  get(LS.company,  'GestiQ Agency'),
+    activity: get(LS.activity, ''),
+    country:  get(LS.country,  'Maroc'),
+    currency: get(LS.currency, 'MAD'),
+    adresse:  '',
     tva_defaut: '20',
   })
 
+  const [notifs, setNotifs] = useState<Record<string, boolean>>(getNotifState)
+  const [onboardingReset, setOnboardingReset] = useState(false)
+
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
+  const [pwLoading, setPwLoading] = useState(false)
+  const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false })
+
+  const saveProfile = () => {
+    save(LS.fullname, profile.fullname)
+    save(LS.role,     profile.role)
+    toast.success('Profil mis à jour')
+  }
+
+  const saveEntreprise = () => {
+    save(LS.company,  entreprise.company)
+    save(LS.activity, entreprise.activity)
+    save(LS.country,  entreprise.country)
+    save(LS.currency, entreprise.currency)
+    toast.success('Paramètres entreprise sauvegardés')
+  }
+
+  const toggleNotif = (key: string) => {
+    setNotifs(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      try { localStorage.setItem(key, String(next[key])) } catch {}
+      return next
+    })
+    toast.success('Préférence mise à jour')
+  }
+
+  const changePassword = async () => {
+    if (!pwForm.current || !pwForm.next) return toast.error('Remplissez tous les champs')
+    if (pwForm.next.length < 6) return toast.error('Le nouveau mot de passe doit contenir au moins 6 caractères')
+    if (pwForm.next !== pwForm.confirm) return toast.error('Les mots de passe ne correspondent pas')
+    setPwLoading(true)
+    try {
+      await api.post('/api/auth/change-password', { currentPassword: pwForm.current, newPassword: pwForm.next })
+      toast.success('Mot de passe mis à jour avec succès')
+      setPwForm({ current: '', next: '', confirm: '' })
+    } catch (err: any) {
+      toast.error(err.message ?? 'Erreur lors du changement de mot de passe')
+    } finally {
+      setPwLoading(false)
+    }
+  }
+
+  const resetOnboarding = () => {
+    try { localStorage.removeItem(LS.onboarding) } catch {}
+    setOnboardingReset(true)
+    toast.success('Onboarding réinitialisé — rechargez la page pour le relancer')
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl">
-      <div>
-        <h1 className="page-title flex items-center gap-2">
-          <Settings className="w-6 h-6 text-blue-400" />
-          Paramètres
-        </h1>
-        <p className="text-slate-500 text-sm mt-1">Configuration de votre espace NextGital</p>
+    <div className="space-y-6 animate-fade-in pb-6 max-w-4xl">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title flex items-center gap-2">
+            <Settings className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            Paramètres
+          </h1>
+          <p className="page-sub">Configuration de votre espace GestiQ</p>
+        </div>
       </div>
 
       <Tabs defaultValue="profil">
@@ -34,64 +140,190 @@ export default function Parametres() {
           <TabsTrigger value="securite">Sécurité</TabsTrigger>
         </TabsList>
 
+        {/* ── Profil ── */}
         <TabsContent value="profil">
-          <div className="card p-6 space-y-5">
-            <h2 className="section-title flex items-center gap-2"><User className="w-4 h-4 text-blue-400" />Informations personnelles</h2>
+          <div className="card-premium p-6 space-y-5">
+            <h2 className="section-title flex items-center gap-2">
+              <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Informations personnelles
+            </h2>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><label className="form-label">Nom complet</label><Input value={profile.nom} onChange={e => setProfile(p => ({ ...p, nom: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">Email</label><Input type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">Téléphone</label><Input value={profile.telephone} onChange={e => setProfile(p => ({ ...p, telephone: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">Entreprise</label><Input value={profile.entreprise} onChange={e => setProfile(p => ({ ...p, entreprise: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <label className="form-label">Nom complet</label>
+                <Input value={profile.fullname} onChange={e => setProfile(p => ({ ...p, fullname: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Email</label>
+                <Input type="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Téléphone</label>
+                <Input value={profile.telephone} onChange={e => setProfile(p => ({ ...p, telephone: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Rôle</label>
+                <Select value={profile.role} onValueChange={v => setProfile(p => ({ ...p, role: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Choisir…" /></SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <Button onClick={() => toast.success('Profil mis à jour')}><Save className="w-4 h-4" />Sauvegarder</Button>
+            <Button onClick={saveProfile} className="gap-1.5"><Save className="w-4 h-4" />Sauvegarder</Button>
           </div>
         </TabsContent>
 
+        {/* ── Entreprise ── */}
         <TabsContent value="entreprise">
-          <div className="card p-6 space-y-5">
-            <h2 className="section-title flex items-center gap-2"><Globe className="w-4 h-4 text-blue-400" />Configuration entreprise</h2>
+          <div className="card-premium p-6 space-y-5">
+            <h2 className="section-title flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Configuration entreprise
+            </h2>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5"><label className="form-label">Raison sociale</label><Input value={profile.entreprise} onChange={e => setProfile(p => ({ ...p, entreprise: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">Adresse</label><Input value={profile.adresse} onChange={e => setProfile(p => ({ ...p, adresse: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">Devise par défaut</label><Input value={profile.devise} onChange={e => setProfile(p => ({ ...p, devise: e.target.value }))} /></div>
-              <div className="space-y-1.5"><label className="form-label">TVA par défaut (%)</label><Input value={profile.tva_defaut} onChange={e => setProfile(p => ({ ...p, tva_defaut: e.target.value }))} /></div>
+              <div className="space-y-1.5">
+                <label className="form-label">Raison sociale</label>
+                <Input value={entreprise.company} onChange={e => setEntreprise(p => ({ ...p, company: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Secteur d'activité</label>
+                <Select value={entreprise.activity} onValueChange={v => setEntreprise(p => ({ ...p, activity: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Choisir…" /></SelectTrigger>
+                  <SelectContent>
+                    {ACTIVITIES.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Pays</label>
+                <Select value={entreprise.country} onValueChange={v => setEntreprise(p => ({ ...p, country: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Devise par défaut</label>
+                <Select value={entreprise.currency} onValueChange={v => setEntreprise(p => ({ ...p, currency: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Adresse</label>
+                <Input value={entreprise.adresse} onChange={e => setEntreprise(p => ({ ...p, adresse: e.target.value }))} placeholder="Casablanca, Maroc" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">TVA par défaut (%)</label>
+                <Input value={entreprise.tva_defaut} onChange={e => setEntreprise(p => ({ ...p, tva_defaut: e.target.value }))} />
+              </div>
             </div>
-            <Button onClick={() => toast.success('Paramètres sauvegardés')}><Save className="w-4 h-4" />Sauvegarder</Button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button onClick={saveEntreprise} className="gap-1.5"><Save className="w-4 h-4" />Sauvegarder</Button>
+              <Button
+                variant="outline"
+                onClick={resetOnboarding}
+                disabled={onboardingReset}
+                className="gap-1.5 text-muted-foreground"
+              >
+                {onboardingReset
+                  ? <><Check className="w-4 h-4 text-emerald-500" /> Réinitialisé</>
+                  : <><RefreshCcw className="w-4 h-4" /> Réinitialiser l'onboarding</>
+                }
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
+        {/* ── Notifications ── */}
         <TabsContent value="notifications">
-          <div className="card p-6 space-y-4">
-            <h2 className="section-title flex items-center gap-2"><Bell className="w-4 h-4 text-blue-400" />Notifications</h2>
-            {[
-              { label: 'Renouvellements domaines (30j avant)', enabled: true },
-              { label: 'Factures impayées (7j après échéance)', enabled: true },
-              { label: 'Prospects sans relance (14j)', enabled: true },
-              { label: 'Rapport mensuel automatique', enabled: false },
-              { label: 'Alertes abonnements', enabled: true },
-            ].map((n, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+          <div className="card-premium p-6 space-y-4">
+            <h2 className="section-title flex items-center gap-2">
+              <Bell className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Notifications
+            </h2>
+            {NOTIFICATIONS.map(n => (
+              <div key={n.key} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <span className="text-sm text-foreground">{n.label}</span>
                 <button
-                  className={`w-10 h-5 rounded-full transition-all ${n.enabled ? 'bg-[#378ADD]' : 'bg-border'} relative`}
-                  onClick={() => toast.success('Préférence mise à jour')}
+                  onClick={() => toggleNotif(n.key)}
+                  className={`w-10 h-5 rounded-full transition-all relative ${notifs[n.key] ? 'bg-blue-600' : 'bg-border'}`}
                 >
-                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${n.enabled ? 'right-0.5' : 'left-0.5'}`} />
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${notifs[n.key] ? 'right-0.5' : 'left-0.5'}`} />
                 </button>
               </div>
             ))}
           </div>
         </TabsContent>
 
+        {/* ── Sécurité ── */}
         <TabsContent value="securite">
-          <div className="card p-6 space-y-5">
-            <h2 className="section-title flex items-center gap-2"><Shield className="w-4 h-4 text-blue-400" />Sécurité</h2>
-            <div className="space-y-4">
-              <div className="space-y-1.5"><label className="form-label">Mot de passe actuel</label><Input type="password" placeholder="••••••••" /></div>
-              <div className="space-y-1.5"><label className="form-label">Nouveau mot de passe</label><Input type="password" placeholder="••••••••" /></div>
-              <div className="space-y-1.5"><label className="form-label">Confirmer le nouveau mot de passe</label><Input type="password" placeholder="••••••••" /></div>
+          <div className="card-premium p-6 space-y-5">
+            <h2 className="section-title flex items-center gap-2">
+              <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Changer le mot de passe
+            </h2>
+            <div className="space-y-4 max-w-sm">
+              <div className="space-y-1.5">
+                <label className="form-label">Mot de passe actuel</label>
+                <div className="relative">
+                  <Input
+                    type={showPw.current ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={pwForm.current}
+                    onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground" onClick={() => setShowPw(p => ({ ...p, current: !p.current }))}>
+                    {showPw.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Nouveau mot de passe</label>
+                <div className="relative">
+                  <Input
+                    type={showPw.next ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={pwForm.next}
+                    onChange={e => setPwForm(p => ({ ...p, next: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground" onClick={() => setShowPw(p => ({ ...p, next: !p.next }))}>
+                    {showPw.next ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {pwForm.next && pwForm.next.length < 6 && (
+                  <p className="text-xs text-red-500">Au moins 6 caractères requis</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Confirmer le nouveau mot de passe</label>
+                <div className="relative">
+                  <Input
+                    type={showPw.confirm ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={pwForm.confirm}
+                    onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
+                    className="pr-9"
+                  />
+                  <button type="button" className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground" onClick={() => setShowPw(p => ({ ...p, confirm: !p.confirm }))}>
+                    {showPw.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {pwForm.confirm && pwForm.next !== pwForm.confirm && (
+                  <p className="text-xs text-red-500">Les mots de passe ne correspondent pas</p>
+                )}
+              </div>
             </div>
-            <Button onClick={() => toast.success('Mot de passe mis à jour')}><Save className="w-4 h-4" />Mettre à jour</Button>
+            <Button onClick={changePassword} disabled={pwLoading} className="gap-1.5">
+              <Save className="w-4 h-4" />
+              {pwLoading ? 'Enregistrement…' : 'Mettre à jour le mot de passe'}
+            </Button>
           </div>
         </TabsContent>
       </Tabs>

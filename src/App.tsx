@@ -2,8 +2,11 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
-import AppLayout from '@/components/layout/AppLayout'
-import { ThemeProvider } from '@/contexts/ThemeContext'
+import AppLayout      from '@/components/layout/AppLayout'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
+import ErrorBoundary  from '@/components/ErrorBoundary'
+import { ThemeProvider }  from '@/contexts/ThemeContext'
+import { TenantProvider } from '@/contexts/TenantContext'
 
 // Lazy load all pages for code splitting & performance
 const Dashboard      = lazy(() => import('@/pages/Dashboard'))
@@ -32,7 +35,12 @@ const ActivityLogs   = lazy(() => import('@/pages/ActivityLogs'))
 const ConseillerIA   = lazy(() => import('@/pages/ConseillerIA'))
 const Taches         = lazy(() => import('@/pages/Taches'))
 const Calendrier     = lazy(() => import('@/pages/Calendrier'))
-const Parametres     = lazy(() => import('@/pages/Parametres'))
+const Parametres       = lazy(() => import('@/pages/Parametres'))
+const Automatisations     = lazy(() => import('@/pages/Automatisations'))
+const AbonnementsClients  = lazy(() => import('@/pages/AbonnementsClients'))
+const Integrations        = lazy(() => import('@/pages/Integrations'))
+const Rapports            = lazy(() => import('@/pages/Rapports'))
+const Landing             = lazy(() => import('@/pages/Landing'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,45 +67,57 @@ export default function App() {
     <ThemeProvider>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <ErrorBoundary>
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            {/* Auth route */}
+            {/* ── Public routes ─────────────────────────────────── */}
+            <Route path="/"     element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
 
-            {/* Standalone routes (no sidebar/header) */}
-            <Route path="/devis/:id/preview" element={<DevisPreview />} />
-
-            {/* App routes inside layout */}
-            <Route element={<AppLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="/prospects" element={<Prospects />} />
-              <Route path="/clients" element={<Clients />} />
-              <Route path="/clients/:id" element={<ClientDetail />} />
-              <Route path="/taches" element={<Taches />} />
-              <Route path="/calendrier" element={<Calendrier />} />
-              <Route path="/devis" element={<Devis />} />
-              <Route path="/factures" element={<Factures />} />
-              <Route path="/contrats" element={<Contrats />} />
-              <Route path="/bons-commande" element={<BonsCommande />} />
-              <Route path="/produits" element={<Produits />} />
-              <Route path="/paiements" element={<Paiements />} />
-              <Route path="/cheques-recus" element={<ChequesRecus />} />
-              <Route path="/cheques-emis" element={<ChequesEmis />} />
-              <Route path="/depenses" element={<Depenses />} />
-              <Route path="/finances" element={<Finances />} />
-              <Route path="/abonnements" element={<Abonnements />} />
-              <Route path="/equipe" element={<Equipe />} />
-              <Route path="/fournisseurs" element={<Fournisseurs />} />
-              <Route path="/domaines" element={<Domaines />} />
-              <Route path="/hebergements" element={<Hebergements />} />
-              <Route path="/statistiques" element={<Statistiques />} />
-              <Route path="/activite" element={<ActivityLogs />} />
-              <Route path="/conseiller-ia" element={<ConseillerIA />} />
-              <Route path="/parametres" element={<Parametres />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+            {/* ── Tenant workspace: gestiq.com/:tenantSlug/* ─────── */}
+            <Route path="/:tenantSlug" element={
+              <TenantProvider>
+                <ProtectedRoute><AppLayout /></ProtectedRoute>
+              </TenantProvider>
+            }>
+              <Route index                              element={<Dashboard />} />
+              <Route path="prospects"                  element={<Prospects />} />
+              <Route path="clients"                    element={<Clients />} />
+              <Route path="clients/:id"                element={<ClientDetail />} />
+              <Route path="taches"                     element={<Taches />} />
+              <Route path="calendrier"                 element={<Calendrier />} />
+              <Route path="devis"                      element={<Devis />} />
+              <Route path="devis/:id/preview"          element={<DevisPreview />} />
+              <Route path="factures"                   element={<Factures />} />
+              <Route path="contrats"                   element={<Contrats />} />
+              <Route path="bons-commande"              element={<BonsCommande />} />
+              <Route path="produits"                   element={<Produits />} />
+              <Route path="paiements"                  element={<Paiements />} />
+              <Route path="cheques-recus"              element={<ChequesRecus />} />
+              <Route path="cheques-emis"               element={<ChequesEmis />} />
+              <Route path="depenses"                   element={<Depenses />} />
+              <Route path="finances"                   element={<Finances />} />
+              <Route path="abonnements"                element={<Abonnements />} />
+              <Route path="abonnements-clients"        element={<AbonnementsClients />} />
+              <Route path="integrations"               element={<Integrations />} />
+              <Route path="equipe"                     element={<Equipe />} />
+              <Route path="fournisseurs"               element={<Fournisseurs />} />
+              <Route path="domaines"                   element={<Domaines />} />
+              <Route path="hebergements"               element={<Hebergements />} />
+              <Route path="statistiques"               element={<Statistiques />} />
+              <Route path="activite"                   element={<ActivityLogs />} />
+              <Route path="conseiller-ia"              element={<ConseillerIA />} />
+              <Route path="parametres"                 element={<Parametres />} />
+              <Route path="automatisations"            element={<Automatisations />} />
+              <Route path="rapports"                   element={<Rapports />} />
+              <Route path="*"                          element={<Navigate to="" replace />} />
             </Route>
+
+            {/* ── Catch-all ─────────────────────────────────────── */}
+            <Route path="*" element={<Navigate to="/auth" replace />} />
           </Routes>
         </Suspense>
+        </ErrorBoundary>
       </BrowserRouter>
 
       <Toaster

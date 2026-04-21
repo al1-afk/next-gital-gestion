@@ -7,14 +7,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 export default function Auth() {
-  const { user, isAuthorized, signIn } = useAuth()
+  const { isAuthorized, signIn } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  if (user && isAuthorized) return <Navigate to="/" replace />
+  if (isAuthorized) {
+    const slug = sessionStorage.getItem('gestiq_tenant_slug') ?? 'demo'
+    return <Navigate to={`/${slug}`} replace />
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,7 +54,7 @@ export default function Auth() {
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mb-4 shadow-lg shadow-blue-600/30">
               <span className="text-white font-bold text-2xl">N</span>
             </div>
-            <h1 className="text-2xl font-bold text-white">NextGital CRM</h1>
+            <h1 className="text-2xl font-bold text-white">GestiQ CRM</h1>
             <p className="text-slate-400 text-sm mt-1">Connectez-vous à votre espace</p>
           </div>
 
@@ -125,7 +128,7 @@ export default function Auth() {
           </form>
 
           <p className="text-center text-xs text-slate-600 mt-6">
-            Accès restreint — Espace privé NextGital
+            Accès restreint — Espace privé GestiQ
           </p>
         </div>
       </motion.div>

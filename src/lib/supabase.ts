@@ -1,14 +1,38 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL     || 'https://placeholder.supabase.co'
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-key'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
+    persistSession:   true,
     autoRefreshToken: true,
   },
 })
+
+/* ─── Tenant-scoped query helper ─────────────────────────────────────
+   Usage:
+     const db = tenantDb(tenantId)
+     db.from('clients').select('*')        // always filtered to tenant
+     db.rpc('my_fn', { ... })              // passes tenant header
+   The tenant_id is carried via a custom Postgres header which the
+   current_tenant_id() SQL function reads from request.jwt.claims.
+   For RLS to work the JWT must also carry app_metadata.tenant_id
+   (set by the auth.set_tenant_claim trigger in the migration).
+──────────────────────────────────────────────────────────────────── */
+export function tenantDb(tenantId: string) {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession:   false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {
+        'x-tenant-id': tenantId,
+      },
+    },
+  })
+}
 
 export type Database = {
   public: {
@@ -28,7 +52,7 @@ export type Database = {
           responsable: string | null
           date_contact: string | null
           date_relance: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['prospects']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['prospects']['Insert']>
@@ -45,7 +69,7 @@ export type Database = {
           ville: string | null
           pays: string | null
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['clients']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['clients']['Insert']>
@@ -63,7 +87,7 @@ export type Database = {
           tva: number
           montant_ttc: number
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['devis']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['devis']['Insert']>
@@ -82,7 +106,7 @@ export type Database = {
           montant_ttc: number
           montant_paye: number
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['factures']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['factures']['Insert']>
@@ -97,7 +121,7 @@ export type Database = {
           date_paiement: string
           reference: string | null
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['paiements']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['paiements']['Insert']>
@@ -115,7 +139,7 @@ export type Database = {
           salaire_base: number
           date_embauche: string | null
           statut: 'actif' | 'inactif' | 'conge'
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['team_members']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['team_members']['Insert']>
@@ -127,9 +151,9 @@ export type Database = {
           description: string
           montant: number
           categorie: string
-          type: 'personnel' | 'professionnel'
+          type: 'personnel' | 'business'
           date_depense: string
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['depenses']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['depenses']['Insert']>
@@ -144,7 +168,7 @@ export type Database = {
           adresse: string | null
           categorie: string | null
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['fournisseurs']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['fournisseurs']['Insert']>
@@ -159,7 +183,7 @@ export type Database = {
           prix_renouvellement: number | null
           client_id: string | null
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['domaines']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['domaines']['Insert']>
@@ -174,10 +198,98 @@ export type Database = {
           prix_mensuel: number | null
           client_id: string | null
           notes: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['hebergements']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['hebergements']['Insert']>
+      }
+      automation_rules: {
+        Row: {
+          id: string
+          created_at: string
+          tenant_id: string
+          label: string
+          description: string
+          enabled: boolean
+          trigger_type: string
+          trigger_config: Record<string, unknown>
+          conditions: unknown[]
+          actions: unknown[]
+          runs_total: number
+          last_run_at: string | null
+        }
+        Insert: Omit<Database['public']['Tables']['automation_rules']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['automation_rules']['Insert']>
+      }
+      automation_logs: {
+        Row: {
+          id: string
+          created_at: string
+          rule_id: string | null
+          tenant_id: string
+          trigger_ref: string | null
+          trigger_table: string | null
+          action_type: string
+          action_result: Record<string, unknown> | null
+          status: 'pending' | 'success' | 'failed'
+          error_message: string | null
+          executed_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['automation_logs']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['automation_logs']['Insert']>
+      }
+      alerts: {
+        Row: {
+          id: string
+          created_at: string
+          tenant_id: string
+          type: string
+          priority: 'low' | 'medium' | 'critical'
+          title: string
+          message: string | null
+          entity_id: string | null
+          entity_type: string | null
+          is_read: boolean
+          is_resolved: boolean
+        }
+        Insert: Omit<Database['public']['Tables']['alerts']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['alerts']['Insert']>
+      }
+      client_subscriptions: {
+        Row: {
+          id: string
+          created_at: string
+          tenant_id: string
+          client_id: string | null
+          nom: string
+          montant: number
+          cycle: 'mensuel' | 'trimestriel' | 'annuel'
+          montant_mensuel: number
+          date_debut: string
+          date_prochaine_facturation: string
+          statut: 'actif' | 'pause' | 'annule' | 'impaye'
+          date_annulation: string | null
+          annulation_raison: string | null
+          facture_auto: boolean
+        }
+        Insert: Omit<Database['public']['Tables']['client_subscriptions']['Row'], 'id' | 'created_at' | 'montant_mensuel'>
+        Update: Partial<Database['public']['Tables']['client_subscriptions']['Insert']>
+      }
+      workspace_members: {
+        Row: {
+          id: string
+          created_at: string
+          workspace_id: string
+          member_email: string
+          member_id: string | null
+          role: 'admin' | 'manager' | 'commercial' | 'comptable' | 'viewer'
+          permissions: Record<string, unknown>
+          invited_at: string
+          accepted_at: string | null
+          status: 'pending' | 'active' | 'revoked'
+        }
+        Insert: Omit<Database['public']['Tables']['workspace_members']['Row'], 'id' | 'created_at'>
+        Update: Partial<Database['public']['Tables']['workspace_members']['Insert']>
       }
       personal_tasks: {
         Row: {
@@ -189,7 +301,7 @@ export type Database = {
           priorite: 'urgent_important' | 'important' | 'urgent' | 'low'
           date_echeance: string | null
           client_id: string | null
-          user_id: string
+          tenant_id: string
         }
         Insert: Omit<Database['public']['Tables']['personal_tasks']['Row'], 'id' | 'created_at'>
         Update: Partial<Database['public']['Tables']['personal_tasks']['Insert']>

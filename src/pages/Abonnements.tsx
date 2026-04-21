@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, Repeat, Edit2, Trash2, AlertTriangle } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Plus, Repeat, Trash2, AlertTriangle, DollarSign, CalendarClock } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -7,97 +8,131 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatCurrency, formatDate, getDaysUntil } from '@/lib/utils'
+import { abonnementsApi } from '@/lib/api'
 import { toast } from 'sonner'
+import { ImportExportButtons } from '@/components/ImportExportButtons'
+import { abonnementsSchema } from '@/lib/importExportSchemas'
 
 interface Abonnement {
-  id: string; nom: string; fournisseur: string; montant: number; cycle: 'mensuel' | 'annuel' | 'trimestriel'
-  date_renouvellement: string; statut: 'actif' | 'inactif' | 'annule'; categorie: string
+  id: string; created_at: string; nom: string; fournisseur: string; montant: number
+  cycle: 'mensuel' | 'annuel' | 'trimestriel'; date_renouvellement: string
+  statut: 'actif' | 'inactif' | 'annule'; categorie: string
 }
 
-const MOCK: Abonnement[] = [
-  { id: '1', nom: 'Adobe Creative Cloud', fournisseur: 'Adobe', montant: 650, cycle: 'mensuel', date_renouvellement: '2026-05-01', statut: 'actif', categorie: 'Outils' },
-  { id: '2', nom: 'Canva Pro', fournisseur: 'Canva', montant: 130, cycle: 'mensuel', date_renouvellement: '2026-04-25', statut: 'actif', categorie: 'Design' },
-  { id: '3', nom: 'GitHub Team', fournisseur: 'GitHub', montant: 240, cycle: 'mensuel', date_renouvellement: '2026-05-10', statut: 'actif', categorie: 'Dev' },
-  { id: '4', nom: 'Notion Pro', fournisseur: 'Notion', montant: 160, cycle: 'mensuel', date_renouvellement: '2026-06-01', statut: 'actif', categorie: 'Outils' },
-  { id: '5', nom: 'AWS S3 + EC2', fournisseur: 'Amazon', montant: 480, cycle: 'mensuel', date_renouvellement: '2026-05-15', statut: 'actif', categorie: 'Infrastructure' },
-  { id: '6', nom: 'SendGrid Email', fournisseur: 'Twilio', montant: 200, cycle: 'mensuel', date_renouvellement: '2026-05-20', statut: 'actif', categorie: 'Email' },
-]
+const EMPTY = { nom: '', fournisseur: '', montant: 0, cycle: 'mensuel' as Abonnement['cycle'], date_renouvellement: '', statut: 'actif' as Abonnement['statut'], categorie: '' }
+
+function toMensuel(a: Abonnement) {
+  if (a.cycle === 'mensuel')     return a.montant
+  if (a.cycle === 'annuel')      return a.montant / 12
+  if (a.cycle === 'trimestriel') return a.montant / 3
+  return 0
+}
 
 export default function Abonnements() {
-  const [abonnements, setAbonnements] = useState(MOCK)
+  const qc = useQueryClient()
+  const { data: abonnements = [], isLoading } = useQuery<Abonnement[]>({
+    queryKey: ['abonnements'],
+    queryFn: () => abonnementsApi.list({ orderBy: 'date_renouvellement', order: 'asc' }) as Promise<Abonnement[]>,
+  })
+
+  const create = useMutation({
+    mutationFn: (data: typeof EMPTY) => abonnementsApi.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['abonnements'] }); toast.success('Abonnement ajouté'); setShowForm(false); setForm(EMPTY) },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+  const remove = useMutation({
+    mutationFn: (id: string) => abonnementsApi.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['abonnements'] }); toast.success('Supprimé') },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ nom: '', fournisseur: '', montant: 0, cycle: 'mensuel' as Abonnement['cycle'], date_renouvellement: '', statut: 'actif' as Abonnement['statut'], categorie: '' })
+  const [form, setForm] = useState(EMPTY)
 
-  const totalMensuel = abonnements.filter(a => a.statut === 'actif').reduce((s, a) => {
-    if (a.cycle === 'mensuel') return s + a.montant
-    if (a.cycle === 'annuel') return s + a.montant / 12
-    if (a.cycle === 'trimestriel') return s + a.montant / 3
-    return s
-  }, 0)
-
-  const save = () => {
-    if (!form.nom) return
-    setAbonnements(prev => [{ ...form, id: Date.now().toString() }, ...prev])
-    setShowForm(false)
-    toast.success('Abonnement ajouté')
-  }
+  const actifs = abonnements.filter(a => a.statut === 'actif')
+  const totalMensuel = actifs.reduce((s, a) => s + toMensuel(a), 0)
+  const prochains = actifs.filter(a => getDaysUntil(a.date_renouvellement) <= 30).length
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="page-header">
         <div>
           <h1 className="page-title">Abonnements</h1>
-          <p className="text-muted-foreground text-sm mt-1">{abonnements.filter(a => a.statut === 'actif').length} actifs · {formatCurrency(totalMensuel)}/mois</p>
+          <p className="text-muted-foreground text-sm mt-1">{actifs.length} actifs · {formatCurrency(totalMensuel)}/mois</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Ajouter</Button>
+        <div className="flex items-center gap-2">
+          <ImportExportButtons
+            schema={abonnementsSchema}
+            data={abonnements}
+            onImport={async (row) => { await create.mutateAsync(row as any) }}
+          />
+          <Button size="sm" onClick={() => setShowForm(true)}><Plus className="w-4 h-4" /> Ajouter</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4"><p className="text-xs text-muted-foreground mb-1">Coût mensuel</p><p className="text-xl font-bold text-foreground">{formatCurrency(totalMensuel)}</p></div>
-        <div className="card p-4"><p className="text-xs text-muted-foreground mb-1">Coût annuel</p><p className="text-xl font-bold text-blue-400">{formatCurrency(totalMensuel * 12)}</p></div>
-        <div className="card p-4"><p className="text-xs text-muted-foreground mb-1">Renouvellements à venir</p><p className="text-xl font-bold text-yellow-400">{abonnements.filter(a => getDaysUntil(a.date_renouvellement) <= 30 && a.statut === 'actif').length}</p></div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+            <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-foreground">{formatCurrency(totalMensuel)}</p><p className="text-xs text-muted-foreground mt-0.5">Coût mensuel</p></div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center flex-shrink-0">
+            <Repeat className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-purple-600 dark:text-purple-400">{formatCurrency(totalMensuel * 12)}</p><p className="text-xs text-muted-foreground mt-0.5">Coût annuel</p></div>
+        </div>
+        <div className="card-premium p-5 flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center flex-shrink-0">
+            <CalendarClock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div><p className="text-xl font-extrabold text-amber-600 dark:text-amber-400">{prochains}</p><p className="text-xs text-muted-foreground mt-0.5">Renouvellements à venir</p></div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {abonnements.map((a, i) => {
-          const days = getDaysUntil(a.date_renouvellement)
-          return (
-            <motion.div key={a.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-              className={`card p-4 hover:border-blue-500/30 transition-all group ${days <= 15 ? 'border-yellow-500/20' : ''}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                    <Repeat className="w-4 h-4 text-blue-400" />
+      {isLoading ? <div className="text-center text-muted-foreground text-sm py-10">Chargement...</div> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {abonnements.map((a, i) => {
+            const days = getDaysUntil(a.date_renouvellement)
+            return (
+              <motion.div key={a.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                className={`card-premium p-4 hover:border-blue-500/30 transition-all group ${days <= 15 ? 'border-yellow-500/20' : ''}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-lg bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                      <Repeat className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground text-sm">{a.nom}</p>
+                      <p className="text-xs text-muted-foreground">{a.fournisseur}</p>
+                    </div>
                   </div>
+                  {days <= 15 && <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-yellow-400 flex-shrink-0" />}
+                </div>
+                <div className="flex items-center justify-between text-sm">
                   <div>
-                    <p className="font-medium text-foreground text-sm">{a.nom}</p>
-                    <p className="text-xs text-muted-foreground">{a.fournisseur}</p>
+                    <p className="text-lg font-bold text-foreground">{formatCurrency(a.montant)}</p>
+                    <p className="text-xs text-muted-foreground capitalize">/ {a.cycle}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Renouvellement</p>
+                    <p className="text-xs font-medium text-foreground">{formatDate(a.date_renouvellement)}</p>
+                    <span className={`badge-pill mt-0.5 ${days <= 15 ? 'badge-warning' : days <= 30 ? 'badge-info' : 'badge-success'}`}>{days}j</span>
                   </div>
                 </div>
-                {days <= 15 && <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />}
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="text-lg font-bold text-foreground">{formatCurrency(a.montant)}</p>
-                  <p className="text-xs text-muted-foreground capitalize">/ {a.cycle}</p>
+                <div className="mt-3 pt-2 border-t border-border flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground capitalize">{a.categorie}</span>
+                  <Button variant="ghost" size="icon" className="w-7 h-7 text-red-400 opacity-0 group-hover:opacity-100" onClick={() => remove.mutate(a.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Renouvellement</p>
-                  <p className="text-xs font-medium text-foreground">{formatDate(a.date_renouvellement)}</p>
-                  <Badge variant={days <= 15 ? 'warning' : 'secondary'} className="text-[10px] mt-0.5">{days}j</Badge>
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-border flex items-center justify-between">
-                <span className="text-xs text-muted-foreground00 capitalize">{a.categorie}</span>
-                <Button variant="ghost" size="icon" className="w-7 h-7 text-red-400 opacity-0 group-hover:opacity-100"
-                  onClick={() => { setAbonnements(prev => prev.filter(x => x.id !== a.id)); toast.success('Supprimé') }}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
+              </motion.div>
+            )
+          })}
+          {abonnements.length === 0 && <div className="col-span-full empty-state"><Repeat className="empty-state-icon" /><p className="empty-state-title">Aucun abonnement</p></div>}
+        </div>
+      )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
@@ -122,7 +157,9 @@ export default function Abonnements() {
             </div>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button onClick={save}>Ajouter</Button>
+              <Button disabled={create.isPending || !form.nom} onClick={() => create.mutate(form)}>
+                {create.isPending ? 'Ajout...' : 'Ajouter'}
+              </Button>
             </div>
           </div>
         </DialogContent>

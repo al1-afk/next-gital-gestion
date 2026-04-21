@@ -5,12 +5,12 @@ import {
   ArrowLeft, Plus, Edit2, Trash2, Phone, Mail, MapPin,
   Building2, CheckSquare, Clock, FileText, Receipt,
   CreditCard, FileCheck, DollarSign, Package, Upload,
-  ChevronDown, ChevronRight, User, Bell, Calendar,
+  ChevronDown, ChevronRight, Calendar,
   Loader2, AlertCircle, Circle, CheckCircle2, AlertTriangle,
+  TrendingUp, Star,
 } from 'lucide-react'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
-import { Badge }   from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useClients, useUpdateClient, useDeleteClient, type Client } from '@/hooks/useClients'
 import { useFactures }  from '@/hooks/useFactures'
@@ -20,27 +20,29 @@ import { toast } from 'sonner'
 
 /* ─── Section wrapper ─────────────────────────────────────────────── */
 function Section({
-  title, icon: Icon, count, action, children, accent = '#378ADD',
+  title, icon: Icon, count, action, children, color = '#6366f1',
 }: {
   title:    string
   icon:     React.ElementType
   count?:   number
   action?:  { label: string; onClick: () => void }
   children: React.ReactNode
-  accent?:  string
+  color?:   string
 }) {
   const [open, setOpen] = useState(true)
   return (
     <div className="card overflow-hidden">
       <div
-        className="flex items-center justify-between px-4 py-3 cursor-pointer select-none hover:bg-muted/30 transition-colors"
+        className="flex items-center justify-between px-5 py-3.5 cursor-pointer select-none hover:bg-muted/20 transition-colors"
         onClick={() => setOpen(o => !o)}
       >
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-muted-foreground" />
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${color}18` }}>
+            <Icon className="w-3.5 h-3.5" style={{ color }} />
+          </div>
           <span className="text-sm font-semibold text-foreground">{title}</span>
           {count !== undefined && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+            <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: `${color}15`, color }}>
               {count}
             </span>
           )}
@@ -48,15 +50,18 @@ function Section({
         <div className="flex items-center gap-2">
           {action && open && (
             <button
-              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors hover:bg-muted"
-              style={{ color: accent }}
+              className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all hover:scale-105"
+              style={{ background: `${color}12`, color }}
               onClick={e => { e.stopPropagation(); action.onClick() }}
             >
               <Plus className="w-3 h-3" />
               {action.label}
             </button>
           )}
-          {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+          {open
+            ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
+            : <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          }
         </div>
       </div>
       <AnimatePresence initial={false}>
@@ -68,7 +73,7 @@ function Section({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="border-t border-border px-4 py-3">
+            <div className="border-t border-border px-5 py-4">
               {children}
             </div>
           </motion.div>
@@ -78,32 +83,33 @@ function Section({
   )
 }
 
-function EmptyState({ label }: { label: string }) {
+function EmptyState({ label, icon: Icon }: { label: string; icon?: React.ElementType }) {
   return (
-    <p className="text-sm text-muted-foreground py-2 text-center">{label}</p>
+    <div className="flex flex-col items-center py-6 gap-2 text-center">
+      {Icon && <Icon className="w-8 h-8 text-muted-foreground/30" />}
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
   )
 }
 
-/* ─── Statut badges ───────────────────────────────────────────────── */
-const DEVIS_STATUT: Record<string, { label: string; color: string }> = {
-  brouillon: { label: 'Brouillon', color: 'text-muted-foreground' },
-  envoye:    { label: 'Envoyé',    color: 'text-blue-400'         },
-  accepte:   { label: 'Accepté',   color: 'text-emerald-400'      },
-  refuse:    { label: 'Refusé',    color: 'text-red-400'          },
-  expire:    { label: 'Expiré',    color: 'text-amber-400'        },
+const DEVIS_STATUT: Record<string, { label: string; bg: string; color: string }> = {
+  brouillon: { label: 'Brouillon', bg: 'bg-muted',                        color: 'text-muted-foreground'                  },
+  envoye:    { label: 'Envoyé',    bg: 'bg-blue-500/10',                   color: 'text-blue-600 dark:text-blue-400'       },
+  accepte:   { label: 'Accepté',   bg: 'bg-emerald-500/10',                color: 'text-emerald-600 dark:text-emerald-400' },
+  refuse:    { label: 'Refusé',    bg: 'bg-red-500/10',                    color: 'text-red-600 dark:text-red-400'         },
+  expire:    { label: 'Expiré',    bg: 'bg-amber-500/10',                  color: 'text-amber-600 dark:text-amber-400'     },
 }
 
-const FACTURE_STATUT: Record<string, { label: string; color: string }> = {
-  brouillon: { label: 'Brouillon', color: 'text-muted-foreground' },
-  envoyee:   { label: 'Envoyée',   color: 'text-blue-400'         },
-  impayee:   { label: 'Impayée',   color: 'text-red-400'          },
-  partielle: { label: 'Partielle', color: 'text-amber-400'        },
-  payee:     { label: 'Payée',     color: 'text-emerald-400'      },
-  annulee:   { label: 'Annulée',   color: 'text-muted-foreground' },
-  refusee:   { label: 'Refusée',   color: 'text-red-400'          },
+const FACTURE_STATUT: Record<string, { label: string; bg: string; color: string }> = {
+  brouillon: { label: 'Brouillon', bg: 'bg-muted',            color: 'text-muted-foreground'                  },
+  envoyee:   { label: 'Envoyée',   bg: 'bg-blue-500/10',      color: 'text-blue-600 dark:text-blue-400'       },
+  impayee:   { label: 'Impayée',   bg: 'bg-red-500/10',       color: 'text-red-600 dark:text-red-400'         },
+  partielle: { label: 'Partielle', bg: 'bg-amber-500/10',     color: 'text-amber-600 dark:text-amber-400'     },
+  payee:     { label: 'Payée',     bg: 'bg-emerald-500/10',   color: 'text-emerald-600 dark:text-emerald-400' },
+  annulee:   { label: 'Annulée',   bg: 'bg-muted',            color: 'text-muted-foreground'                  },
+  refusee:   { label: 'Refusée',   bg: 'bg-red-500/10',       color: 'text-red-600 dark:text-red-400'         },
 }
 
-/* ─── Note interface ──────────────────────────────────────────────── */
 interface ClientNote {
   id:         string
   created_at: string
@@ -111,7 +117,6 @@ interface ClientNote {
   text:       string
 }
 
-/* ─── Client edit form ────────────────────────────────────────────── */
 function ClientEditForm({ client, onClose }: { client: Client; onClose: () => void }) {
   const update = useUpdateClient()
   const [form, setForm] = useState({
@@ -177,29 +182,28 @@ function ClientEditForm({ client, onClose }: { client: Client; onClose: () => vo
 
 /* ─── Main page ───────────────────────────────────────────────────── */
 export default function ClientDetail() {
-  const { id } = useParams<{ id: string }>()
+  const { id, tenantSlug } = useParams<{ id: string; tenantSlug: string }>()
   const navigate = useNavigate()
-  const { data: clients = [] }   = useClients()
-  const { data: allFactures = [] } = useFactures()
-  const { data: allDevis = [] }    = useDevis()
+  const base = tenantSlug ? `/${tenantSlug}` : ''
+  const { data: clients = [] }      = useClients()
+  const { data: allFactures = [] }  = useFactures()
+  const { data: allDevis = [] }     = useDevis()
   const deleteClient = useDeleteClient()
 
-  const client = clients.find(c => c.id === id)
-
+  const client   = clients.find(c => c.id === id)
   const factures = useMemo(() => allFactures.filter(f => f.client_id === id), [allFactures, id])
   const devis    = useMemo(() => allDevis.filter(d => d.client_id === id),    [allDevis, id])
 
-  /* ── Local state (mock until DB wired) ── */
-  const [tasks,     setTasks]     = useState<{ id: string; titre: string; done: boolean }[]>([])
-  const [notes,     setNotes]     = useState<ClientNote[]>([
+  const [tasks,      setTasks]      = useState<{ id: string; titre: string; done: boolean }[]>([])
+  const [notes,      setNotes]      = useState<ClientNote[]>([
     client?.notes
       ? { id: '0', created_at: new Date().toISOString(), tag: 'Info', text: client.notes }
       : null,
   ].filter(Boolean) as ClientNote[])
-  const [newNote,   setNewNote]   = useState('')
-  const [noteTag,   setNoteTag]   = useState('Info')
-  const [newTask,   setNewTask]   = useState('')
-  const [editOpen,  setEditOpen]  = useState(false)
+  const [newNote,    setNewNote]    = useState('')
+  const [noteTag,    setNoteTag]    = useState('Info')
+  const [newTask,    setNewTask]    = useState('')
+  const [editOpen,   setEditOpen]   = useState(false)
   const [delConfirm, setDelConfirm] = useState(false)
 
   if (!client) {
@@ -207,7 +211,7 @@ export default function ClientDetail() {
       <div className="flex flex-col items-center justify-center py-32 gap-4">
         <AlertCircle className="w-10 h-10 text-muted-foreground" />
         <p className="text-muted-foreground">Client introuvable.</p>
-        <Button size="sm" variant="secondary" onClick={() => navigate('/clients')}>
+        <Button size="sm" variant="secondary" onClick={() => navigate(`${base}/clients`)}>
           <ArrowLeft className="w-4 h-4" /> Retour aux clients
         </Button>
       </div>
@@ -215,20 +219,14 @@ export default function ClientDetail() {
   }
 
   const initials = getInitials(client.nom)
-  const totalCA  = factures
-    .filter(f => f.statut === 'payee')
-    .reduce((s, f) => s + f.montant_ttc, 0)
+  const totalCA  = factures.filter(f => f.statut === 'payee').reduce((s, f) => s + f.montant_ttc, 0)
+  const enAttente = factures
+    .filter(f => ['envoyee', 'impayee', 'partielle'].includes(f.statut))
+    .reduce((s, f) => s + f.montant_ttc - f.montant_paye, 0)
 
   const addNote = () => {
     if (!newNote.trim()) return
-    const now = new Date()
-    const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-    setNotes(p => [{
-      id:         Date.now().toString(),
-      created_at: now.toISOString(),
-      tag:        noteTag,
-      text:       newNote.trim(),
-    }, ...p])
+    setNotes(p => [{ id: Date.now().toString(), created_at: new Date().toISOString(), tag: noteTag, text: newNote.trim() }, ...p])
     setNewNote('')
     toast.success('Note ajoutée')
   }
@@ -241,131 +239,153 @@ export default function ClientDetail() {
 
   const handleDelete = () => {
     deleteClient.mutate(client.id, {
-      onSuccess: () => { navigate('/clients'); toast.success('Client supprimé') },
+      onSuccess: () => { navigate(`${base}/clients`); toast.success('Client supprimé') },
     })
   }
+
+  // Avatar color based on name
+  const avatarColors = [
+    ['#6366f1','#818cf8'], ['#8b5cf6','#a78bfa'], ['#ec4899','#f472b6'],
+    ['#3b82f6','#60a5fa'], ['#10b981','#34d399'], ['#f59e0b','#fbbf24'],
+  ]
+  const colorIdx = client.nom.charCodeAt(0) % avatarColors.length
+  const [clr1, clr2] = avatarColors[colorIdx]
 
   return (
     <div className="space-y-5 animate-fade-in">
 
-      {/* ── Top bar ── */}
-      <div className="flex items-center gap-3">
+      {/* ── Breadcrumb ── */}
+      <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate('/clients')}
+          onClick={() => navigate(`${base}/clients`)}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Clients
         </button>
-        <span className="text-muted-foreground">/</span>
+        <span className="text-muted-foreground/40">/</span>
         <span className="text-sm font-medium text-foreground">{client.nom}</span>
       </div>
 
-      {/* ── Hero header ── */}
-      <div className="card p-5">
-        <div className="flex items-start gap-4">
+      {/* ── Hero Banner ── */}
+      <div className="relative overflow-hidden rounded-2xl" style={{
+        background: `linear-gradient(135deg, ${clr1} 0%, ${clr2} 100%)`,
+      }}>
+        {/* decorative blobs */}
+        <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full opacity-20" style={{ background: 'white' }} />
+        <div className="absolute -bottom-8 -left-8 w-36 h-36 rounded-full opacity-10" style={{ background: 'white' }} />
+
+        <div className="relative p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
           {/* Avatar */}
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#378ADD]/40 to-[#3a526b]/60 border border-[#378ADD]/30 flex items-center justify-center flex-shrink-0 shadow-lg">
-            <span className="text-[#378ADD] font-bold text-xl">{initials}</span>
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-lg flex-shrink-0"
+            style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(10px)', border: '2px solid rgba(255,255,255,0.3)' }}>
+            {initials}
           </div>
 
+          {/* Name + contacts */}
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-foreground leading-tight">{client.nom}</h1>
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-2xl font-black text-white leading-tight">{client.nom}</h1>
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-sm">Client</span>
+            </div>
             {client.entreprise && (
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
+              <p className="text-white/80 text-sm flex items-center gap-1.5 mb-3">
                 <Building2 className="w-3.5 h-3.5" />{client.entreprise}
               </p>
             )}
-            <div className="flex flex-wrap gap-3 mt-3">
+            <div className="flex flex-wrap gap-3">
               {client.telephone && (
                 <a href={`tel:${client.telephone}`}
-                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  <Phone className="w-3.5 h-3.5 text-emerald-400" />{client.telephone}
+                  className="flex items-center gap-1.5 text-xs text-white/90 bg-white/15 hover:bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all">
+                  <Phone className="w-3 h-3" />{client.telephone}
                 </a>
               )}
               {client.email && (
                 <a href={`mailto:${client.email}`}
-                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  <Mail className="w-3.5 h-3.5 text-blue-400" />{client.email}
+                  className="flex items-center gap-1.5 text-xs text-white/90 bg-white/15 hover:bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-full transition-all">
+                  <Mail className="w-3 h-3" />{client.email}
                 </a>
               )}
               {client.ville && (
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <MapPin className="w-3.5 h-3.5" />{[client.ville, client.pays].filter(Boolean).join(', ')}
+                <span className="flex items-center gap-1.5 text-xs text-white/80 bg-white/10 px-3 py-1.5 rounded-full">
+                  <MapPin className="w-3 h-3" />{[client.ville, client.pays].filter(Boolean).join(', ')}
                 </span>
               )}
             </div>
           </div>
 
-          {/* KPIs */}
-          <div className="hidden sm:flex items-center gap-4 text-center">
-            <div>
-              <p className="text-lg font-bold text-foreground">{factures.length}</p>
-              <p className="text-[11px] text-muted-foreground">Factures</p>
-            </div>
-            <div className="w-px h-8 bg-border" />
-            <div>
-              <p className="text-lg font-bold text-emerald-400">{formatCurrency(totalCA)}</p>
-              <p className="text-[11px] text-muted-foreground">CA payé</p>
-            </div>
-            <div className="w-px h-8 bg-border" />
-            <div>
-              <p className="text-lg font-bold text-foreground">{devis.length}</p>
-              <p className="text-[11px] text-muted-foreground">Devis</p>
-            </div>
-          </div>
-
           {/* Actions */}
           <div className="flex gap-2 flex-shrink-0">
-            <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
+            <Button
+              size="sm"
+              className="bg-white/20 hover:bg-white/30 text-white border-white/30 border backdrop-blur-sm h-9"
+              variant="ghost"
+              onClick={() => setEditOpen(true)}
+            >
               <Edit2 className="w-3.5 h-3.5" /> Modifier
             </Button>
             <Button
               size="sm"
-              className="bg-red-500/10 text-red-400 hover:bg-red-500/20 border-0"
+              className="bg-red-500/30 hover:bg-red-500/50 text-white border-0 h-9"
               variant="ghost"
               onClick={() => setDelConfirm(true)}
             >
-              <Trash2 className="w-3.5 h-3.5" /> Supprimer
+              <Trash2 className="w-3.5 h-3.5" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-start">
+      {/* ── KPI Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'CA Encaissé',  value: formatCurrency(totalCA),    icon: TrendingUp,  color: '#10b981', bg: '#10b98112' },
+          { label: 'En attente',   value: formatCurrency(enAttente),  icon: Clock,       color: '#f59e0b', bg: '#f59e0b12' },
+          { label: 'Factures',     value: String(factures.length),    icon: Receipt,     color: '#3b82f6', bg: '#3b82f612' },
+          { label: 'Devis',        value: String(devis.length),       icon: FileCheck,   color: '#8b5cf6', bg: '#8b5cf612' },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="card p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+              <Icon className="w-5 h-5" style={{ color }} />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-base font-bold text-foreground leading-tight">{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
 
-        {/* ── LEFT: activity sections ── */}
+      {/* ── Two-column layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5 items-start">
+
+        {/* LEFT */}
         <div className="space-y-3">
 
           {/* Tâches */}
-          <Section
-            title="Tâches"
-            icon={CheckSquare}
-            count={tasks.length}
+          <Section title="Tâches" icon={CheckSquare} count={tasks.length} color="#6366f1"
             action={{ label: 'Ajouter', onClick: () => {} }}
           >
-            {/* Quick add */}
-            <div className="flex gap-2 mb-3">
+            <div className="flex gap-2 mb-4">
               <Input
                 value={newTask}
                 onChange={e => setNewTask(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addTask()}
                 placeholder="Nouvelle tâche..."
-                className="h-8 text-sm"
+                className="h-9 text-sm"
               />
-              <Button size="sm" className="h-8 px-3" onClick={addTask} disabled={!newTask.trim()}>
-                <Plus className="w-3.5 h-3.5" />
+              <Button size="sm" className="h-9 px-3" onClick={addTask} disabled={!newTask.trim()}>
+                <Plus className="w-4 h-4" />
               </Button>
             </div>
             {tasks.length === 0
-              ? <EmptyState label="Aucune tâche" />
+              ? <EmptyState label="Aucune tâche pour ce client" icon={CheckSquare} />
               : tasks.map(t => (
-                  <div key={t.id} className="flex items-center gap-2 py-1.5">
+                  <div key={t.id} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
                     <button onClick={() => setTasks(p => p.map(x => x.id === t.id ? { ...x, done: !x.done } : x))}>
                       {t.done
-                        ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        : <Circle       className="w-4 h-4 text-muted-foreground" />
+                        ? <CheckCircle2 className="w-4.5 h-4.5 text-emerald-500" />
+                        : <Circle className="w-4.5 h-4.5 text-muted-foreground" />
                       }
                     </button>
                     <span className={`text-sm flex-1 ${t.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
@@ -379,53 +399,47 @@ export default function ClientDetail() {
             }
           </Section>
 
-          {/* Journal d'activité */}
-          <Section title="Journal d'activité" icon={Clock}>
-            <EmptyState label="Aucune activité enregistrée" />
-          </Section>
-
           {/* Historique / Notes */}
-          <Section
-            title="Historique"
-            icon={FileText}
-            count={notes.length}
+          <Section title="Historique & Notes" icon={FileText} count={notes.length} color="#8b5cf6"
             action={{ label: 'Ajouter une note', onClick: () => {} }}
-            accent="#8B5CF6"
           >
-            {/* Add note form */}
-            <div className="space-y-2 mb-3">
-              <div className="flex gap-2">
-                <Input
-                  value={noteTag}
-                  onChange={e => setNoteTag(e.target.value)}
-                  placeholder="Tag (ex : CRM)"
-                  className="h-8 text-sm w-28 flex-shrink-0"
-                />
-                <Input
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addNote()}
-                  placeholder="Ajouter une note..."
-                  className="h-8 text-sm flex-1"
-                />
-                <Button size="sm" className="h-8 px-3 bg-violet-500/20 text-violet-400 hover:bg-violet-500/30 border-0" onClick={addNote} disabled={!newNote.trim()}>
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              </div>
+            <div className="flex gap-2 mb-4">
+              <select
+                value={noteTag}
+                onChange={e => setNoteTag(e.target.value)}
+                className="h-9 text-sm rounded-lg border border-border bg-background px-2 text-foreground w-24 flex-shrink-0"
+              >
+                {['Info', 'CRM', 'Appel', 'Email', 'RDV', 'Important'].map(t => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+              <Input
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addNote()}
+                placeholder="Ajouter une note..."
+                className="h-9 text-sm flex-1"
+              />
+              <Button size="sm" className="h-9 px-3 bg-violet-500/15 text-violet-600 dark:text-violet-400 hover:bg-violet-500/25 border-0"
+                onClick={addNote} disabled={!newNote.trim()}>
+                <Plus className="w-4 h-4" />
+              </Button>
             </div>
             {notes.length === 0
-              ? <EmptyState label="Aucun historique" />
+              ? <EmptyState label="Aucun historique enregistré" icon={FileText} />
               : notes.map(n => (
-                  <div key={n.id} className="flex items-start gap-2 py-2 border-b border-border last:border-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
+                  <div key={n.id} className="flex items-start gap-3 py-3 border-b border-border last:border-0">
+                    <div className="w-2 h-2 rounded-full bg-violet-500 mt-1.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] text-muted-foreground">
-                          [{new Date(n.created_at).toLocaleDateString('fr-FR')} {new Date(n.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}]
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(n.created_at).toLocaleDateString('fr-FR')} {new Date(n.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide">{n.tag}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 uppercase tracking-wide">
+                          {n.tag}
+                        </span>
                       </div>
-                      <p className="text-sm text-foreground">{n.text}</p>
+                      <p className="text-sm text-foreground leading-relaxed">{n.text}</p>
                     </div>
                     <button onClick={() => setNotes(p => p.filter(x => x.id !== n.id))}>
                       <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-red-400 transition-colors" />
@@ -436,26 +450,22 @@ export default function ClientDetail() {
           </Section>
 
           {/* Devis */}
-          <Section
-            title="Devis"
-            icon={FileCheck}
-            count={devis.length}
-            action={{ label: 'Nouveau devis', onClick: () => navigate('/devis') }}
-            accent="#8B5CF6"
+          <Section title="Devis" icon={FileCheck} count={devis.length} color="#8b5cf6"
+            action={{ label: 'Nouveau devis', onClick: () => navigate(`${base}/devis`) }}
           >
             {devis.length === 0
-              ? <EmptyState label="Aucun devis" />
+              ? <EmptyState label="Aucun devis pour ce client" icon={FileCheck} />
               : devis.map(d => {
                   const s = DEVIS_STATUT[d.statut]
                   return (
-                    <div key={d.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div key={d.id} className="flex items-center justify-between py-3 border-b border-border last:border-0 hover:bg-muted/20 -mx-2 px-2 rounded-lg transition-colors cursor-pointer">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{d.numero}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(d.date_emission)}</p>
+                        <p className="text-sm font-semibold text-foreground">{d.numero}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(d.date_emission)}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-medium ${s?.color}`}>{s?.label}</span>
-                        <span className="text-sm font-semibold text-foreground">{formatCurrency(d.montant_ttc)}</span>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${s?.bg} ${s?.color}`}>{s?.label}</span>
+                        <span className="text-sm font-bold text-foreground">{formatCurrency(d.montant_ttc)}</span>
                       </div>
                     </div>
                   )
@@ -464,26 +474,22 @@ export default function ClientDetail() {
           </Section>
 
           {/* Factures */}
-          <Section
-            title="Factures"
-            icon={Receipt}
-            count={factures.length}
-            action={{ label: 'Nouvelle facture', onClick: () => navigate('/factures') }}
-            accent="#3B82F6"
+          <Section title="Factures" icon={Receipt} count={factures.length} color="#3b82f6"
+            action={{ label: 'Nouvelle facture', onClick: () => navigate(`${base}/factures`) }}
           >
             {factures.length === 0
-              ? <EmptyState label="Aucune facture" />
+              ? <EmptyState label="Aucune facture pour ce client" icon={Receipt} />
               : factures.map(f => {
                   const s = FACTURE_STATUT[f.statut]
                   return (
-                    <div key={f.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div key={f.id} className="flex items-center justify-between py-3 border-b border-border last:border-0 hover:bg-muted/20 -mx-2 px-2 rounded-lg transition-colors cursor-pointer">
                       <div>
-                        <p className="text-sm font-medium text-foreground">{f.numero}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(f.date_emission)}</p>
+                        <p className="text-sm font-semibold text-foreground">{f.numero}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{formatDate(f.date_emission)}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-medium ${s?.color}`}>{s?.label}</span>
-                        <span className="text-sm font-semibold text-foreground">{formatCurrency(f.montant_ttc)}</span>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${s?.bg} ${s?.color}`}>{s?.label}</span>
+                        <span className="text-sm font-bold text-foreground">{formatCurrency(f.montant_ttc)}</span>
                       </div>
                     </div>
                   )
@@ -492,153 +498,137 @@ export default function ClientDetail() {
           </Section>
 
           {/* Paiements */}
-          <Section
-            title="💰 Paiements"
-            icon={DollarSign}
-            count={0}
-            action={{ label: 'Nouveau paiement', onClick: () => navigate('/paiements') }}
-            accent="#10B981"
+          <Section title="Paiements" icon={DollarSign} count={0} color="#10b981"
+            action={{ label: 'Nouveau paiement', onClick: () => navigate(`${base}/paiements`) }}
           >
-            <EmptyState label="Aucun paiement" />
+            <EmptyState label="Aucun paiement enregistré" icon={DollarSign} />
           </Section>
 
           {/* Chèques */}
-          <Section
-            title="Chèques"
-            icon={CreditCard}
-            count={0}
-            action={{ label: 'Nouveau chèque', onClick: () => navigate('/cheques-recus') }}
+          <Section title="Chèques" icon={CreditCard} count={0} color="#6366f1"
+            action={{ label: 'Nouveau chèque', onClick: () => navigate(`${base}/cheques-recus`) }}
           >
-            <EmptyState label="Aucun chèque" />
-          </Section>
-
-          {/* Contrats */}
-          <Section
-            title="Contrats"
-            icon={FileText}
-            count={0}
-            action={{ label: 'Nouveau contrat', onClick: () => navigate('/contrats') }}
-            accent="#F59E0B"
-          >
-            <EmptyState label="Aucun contrat" />
-          </Section>
-
-          {/* Reçus */}
-          <Section
-            title="Reçus"
-            icon={Package}
-            count={0}
-            action={{ label: 'Nouveau reçu', onClick: () => {} }}
-          >
-            <EmptyState label="Aucun reçu" />
+            <EmptyState label="Aucun chèque enregistré" icon={CreditCard} />
           </Section>
 
           {/* Documents */}
-          <Section
-            title="Documents"
-            icon={Upload}
-            count={0}
+          <Section title="Documents" icon={Upload} count={0} color="#64748b"
             action={{ label: 'Uploader', onClick: () => {} }}
           >
-            <div className="flex flex-col items-center py-4 gap-2">
-              <Upload className="w-8 h-8 text-muted-foreground opacity-30" />
-              <p className="text-sm text-muted-foreground">Aucun document</p>
-              <button className="text-xs text-[#378ADD] hover:underline">Glisser-déposer ou cliquer pour uploader</button>
+            <div className="flex flex-col items-center py-6 gap-3 border-2 border-dashed border-border rounded-xl">
+              <Upload className="w-8 h-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Glisser-déposer ou cliquer pour uploader</p>
             </div>
           </Section>
         </div>
 
-        {/* ── RIGHT: info sidebar ── */}
+        {/* RIGHT sidebar */}
         <div className="space-y-3 lg:sticky lg:top-4">
 
-          {/* Info card */}
-          <div className="card p-4 space-y-3">
+          {/* Contact info */}
+          <div className="card p-5 space-y-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Informations</p>
-
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {client.telephone && (
-                <div className="flex items-center gap-2.5">
-                  <Phone className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                  <a href={`tel:${client.telephone}`} className="text-sm text-foreground hover:text-emerald-400 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <a href={`tel:${client.telephone}`} className="text-sm text-foreground hover:text-emerald-500 transition-colors">
                     {client.telephone}
                   </a>
                 </div>
               )}
               {client.email && (
-                <div className="flex items-center gap-2.5">
-                  <Mail className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                  <a href={`mailto:${client.email}`} className="text-sm text-foreground hover:text-blue-400 transition-colors truncate">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                    <Mail className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <a href={`mailto:${client.email}`} className="text-sm text-foreground hover:text-blue-500 transition-colors truncate">
                     {client.email}
                   </a>
                 </div>
               )}
-              {client.adresse && (
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              {(client.adresse || client.ville) && (
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                  </div>
                   <span className="text-sm text-muted-foreground leading-snug">
                     {[client.adresse, client.ville, client.pays].filter(Boolean).join(', ')}
                   </span>
                 </div>
               )}
-              <div className="flex items-center gap-2.5">
-                <Calendar className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                <span className="text-sm text-muted-foreground">Client depuis {formatDate(client.created_at)}</span>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                </div>
+                <span className="text-sm text-muted-foreground">Depuis {formatDate(client.created_at)}</span>
               </div>
             </div>
 
-            {/* Notes */}
             {notes.length > 0 && (
-              <div className="pt-2 border-t border-border space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">Notes</p>
-                {notes.slice(0, 3).map(n => (
-                  <div key={n.id} className="text-xs text-muted-foreground leading-relaxed">
-                    <span className="text-[10px] text-violet-400 font-medium">
-                      [{new Date(n.created_at).toLocaleDateString('fr-FR')} {new Date(n.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}] {n.tag}
-                    </span>
-                    <br />
-                    {n.text}
+              <div className="pt-3 border-t border-border space-y-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Notes</p>
+                {notes.slice(0, 2).map(n => (
+                  <div key={n.id} className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-2.5 leading-relaxed">
+                    <span className="font-bold text-violet-600 dark:text-violet-400">[{n.tag}]</span> {n.text}
                   </div>
                 ))}
               </div>
             )}
 
             <div className="flex gap-2 pt-1">
-              <Button variant="secondary" size="sm" className="flex-1 h-7 text-xs" onClick={() => setEditOpen(true)}>
+              <Button variant="secondary" size="sm" className="flex-1 h-8 text-xs" onClick={() => setEditOpen(true)}>
                 <Edit2 className="w-3 h-3" /> Modifier
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex-1 h-7 text-xs text-red-400 hover:bg-red-500/10"
-                onClick={() => setDelConfirm(true)}
-              >
-                <Trash2 className="w-3 h-3" /> Supprimer
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-red-400 hover:bg-red-500/10 px-3"
+                onClick={() => setDelConfirm(true)}>
+                <Trash2 className="w-3 h-3" />
               </Button>
             </div>
           </div>
 
-          {/* Stats card */}
-          <div className="card p-4 space-y-3">
+          {/* Stats */}
+          <div className="card p-5 space-y-3">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Statistiques</p>
             {[
-              { label: 'Devis créés',      value: devis.length,    color: 'text-violet-400' },
-              { label: 'Factures',         value: factures.length, color: 'text-blue-400'   },
-              { label: 'CA payé',          value: formatCurrency(totalCA), color: 'text-emerald-400' },
-              { label: 'En attente',       value: formatCurrency(
-                factures.filter(f => ['envoyee','impayee','partielle'].includes(f.statut))
-                        .reduce((s,f) => s + f.montant_ttc - f.montant_paye, 0)
-              ), color: 'text-amber-400' },
-            ].map(k => (
-              <div key={k.label} className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{k.label}</span>
-                <span className={`text-sm font-bold ${k.color}`}>{k.value}</span>
+              { label: 'Devis créés',  value: devis.length,              color: 'text-violet-600 dark:text-violet-400' },
+              { label: 'Factures',     value: factures.length,           color: 'text-blue-600 dark:text-blue-400'     },
+              { label: 'CA payé',      value: formatCurrency(totalCA),   color: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'En attente',   value: formatCurrency(enAttente), color: 'text-amber-600 dark:text-amber-400'   },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="flex items-center justify-between py-1">
+                <span className="text-xs text-muted-foreground">{label}</span>
+                <span className={`text-sm font-bold ${color}`}>{value}</span>
               </div>
             ))}
+          </div>
+
+          {/* Client score */}
+          <div className="card p-5"
+            style={{ background: `linear-gradient(135deg, ${clr1}15, ${clr2}10)`, borderColor: `${clr1}25` }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Score client</p>
+              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+            </div>
+            <div className="flex items-end gap-2">
+              <span className="text-3xl font-black" style={{ color: clr1 }}>
+                {Math.min(100, Math.round((totalCA / 10000) * 10 + factures.length * 5 + devis.length * 3))}
+              </span>
+              <span className="text-sm text-muted-foreground mb-1">/ 100</span>
+            </div>
+            <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{
+                width: `${Math.min(100, Math.round((totalCA / 10000) * 10 + factures.length * 5 + devis.length * 3))}%`,
+                background: `linear-gradient(90deg, ${clr1}, ${clr2})`,
+              }} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Edit dialog ── */}
+      {/* Edit dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -648,7 +638,7 @@ export default function ClientDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete confirm ── */}
+      {/* Delete confirm */}
       <Dialog open={delConfirm} onOpenChange={setDelConfirm}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -661,12 +651,8 @@ export default function ClientDetail() {
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="secondary" size="sm" onClick={() => setDelConfirm(false)}>Annuler</Button>
-            <Button
-              size="sm"
-              className="bg-red-500 hover:bg-red-600 text-white border-0"
-              onClick={handleDelete}
-              disabled={deleteClient.isPending}
-            >
+            <Button size="sm" className="bg-red-500 hover:bg-red-600 text-white border-0"
+              onClick={handleDelete} disabled={deleteClient.isPending}>
               {deleteClient.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               Supprimer définitivement
             </Button>

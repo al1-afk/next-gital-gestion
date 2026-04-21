@@ -23,12 +23,12 @@ export function generateFacturePDF(facture: Facture): void {
   doc.setFontSize(22)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(58, 82, 107)
-  doc.text('NextGital', m, 22)
+  doc.text('GestiQ', m, 22)
 
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(100, 116, 139)
-  doc.text('Casablanca, Maroc  ·  contact@nextgital.com', m, 28)
+  doc.text('Casablanca, Maroc  ·  contact@gestiq.com', m, 28)
 
   /* ── Header right: invoice meta ───────────────────────────── */
   doc.setFontSize(18)
@@ -180,7 +180,7 @@ export function generateFacturePDF(facture: Facture): void {
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(148, 163, 184)
   doc.text(
-    'NextGital · Casablanca, Maroc · contact@nextgital.com · Merci pour votre confiance.',
+    'GestiQ · Casablanca, Maroc · contact@gestiq.com · Merci pour votre confiance.',
     pageW / 2, pageH - 13, { align: 'center' }
   )
 
