@@ -10,6 +10,7 @@ import Onboarding, { isOnboardingDone } from '@/components/Onboarding'
 import { useRealtime } from '@/hooks/useRealtime'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useNetworkStatus } from '@/hooks/useNetworkStatus'
+import { useOfflineSync } from '@/hooks/useOfflineSync'
 import PwaInstallBanner from '@/components/PwaInstallBanner'
 import ShortcutsModal from '@/components/ShortcutsModal'
 
@@ -27,6 +28,7 @@ export default function AppLayout() {
   useRealtime()
   useKeyboardShortcuts()
   useNetworkStatus()
+  useOfflineSync()
 
   const handleToggle = () => {
     setCollapsed(prev => {

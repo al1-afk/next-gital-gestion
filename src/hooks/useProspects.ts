@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { prospectsApi } from '@/lib/api'
+import { prospectsOffline } from '@/lib/offline/prospectsOffline'
 import { toast } from 'sonner'
 
 export type ProspectStatut = 'nouveau' | 'contacte' | 'qualifie' | 'proposition' | 'gagne' | 'perdu'
@@ -39,17 +39,22 @@ const KEY = 'prospects'
 export function useProspects() {
   return useQuery<Prospect[]>({
     queryKey: [KEY],
-    queryFn:  () => prospectsApi.list({ orderBy: 'created_at', order: 'desc' }) as Promise<Prospect[]>,
+    queryFn:  () => prospectsOffline.list({ orderBy: 'created_at', order: 'desc' }),
     staleTime: 1000 * 60 * 2,
   })
 }
+
+const offlineNote = () =>
+  (typeof navigator !== 'undefined' && !navigator.onLine)
+    ? ' (hors ligne — synchronisation au retour)'
+    : ''
 
 export function useCreateProspect() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: Omit<Prospect, 'id' | 'created_at'>) =>
-      prospectsApi.create(data) as Promise<Prospect>,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect créé') },
+      prospectsOffline.create(data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect créé' + offlineNote()) },
     onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
   })
 }
@@ -58,8 +63,8 @@ export function useUpdateProspect() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, ...data }: Partial<Prospect> & { id: string }) =>
-      prospectsApi.update(id, data) as Promise<Prospect>,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect mis à jour') },
+      prospectsOffline.update(id, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect mis à jour' + offlineNote()) },
     onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
   })
 }
@@ -67,8 +72,8 @@ export function useUpdateProspect() {
 export function useDeleteProspect() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) => prospectsApi.remove(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect supprimé') },
+    mutationFn: (id: string) => prospectsOffline.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [KEY] }); toast.success('Prospect supprimé' + offlineNote()) },
     onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
   })
 }
