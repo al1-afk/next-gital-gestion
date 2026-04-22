@@ -96,6 +96,12 @@ export const authApi = {
   me: () => api.get<{ id: string; email: string; name: string; role: string; slug: string; tenant_name: string; plan: string }>(
     '/api/auth/me'
   ),
+
+  forgotPassword: (email: string) =>
+    api.publicPost<{ success: boolean }>('/api/auth/forgot-password', { email }),
+
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    api.publicPost<{ success: boolean }>('/api/auth/reset-password', { email, code, newPassword }),
 }
 
 /* ── Tenant API ──────────────────────────────────────────────── */

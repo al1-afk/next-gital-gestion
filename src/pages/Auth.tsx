@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { Eye, EyeOff, Lock, Mail, ArrowRight, Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Eye, EyeOff, Lock, Mail, ArrowRight, Loader2, X, KeyRound, CheckCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { authApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -13,6 +14,7 @@ export default function Auth() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resetOpen, setResetOpen] = useState(false)
 
   if (isAuthorized) {
     const slug = sessionStorage.getItem('gestiq_tenant_slug') ?? 'demo'
@@ -69,7 +71,7 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="votre@email.com"
-                  className="pl-9"
+                  className="pl-9 bg-slate-800/60 border-slate-700 text-white placeholder:text-slate-500 focus-visible:border-blue-500"
                   required
                   autoFocus
                 />
@@ -86,7 +88,7 @@ export default function Auth() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="pl-9 pr-9"
+                  className="pl-9 pr-9 bg-slate-800/60 border-slate-700 text-white placeholder:text-slate-500 focus-visible:border-blue-500"
                   required
                 />
                 <button
@@ -114,7 +116,7 @@ export default function Auth() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 text-base mt-2"
+              className="w-full h-11 text-base mt-2 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white shadow-lg shadow-blue-600/30 border-0"
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -125,6 +127,17 @@ export default function Auth() {
                 </>
               )}
             </Button>
+
+            {/* Forgot password */}
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => setResetOpen(true)}
+                className="text-sm text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
           </form>
 
           <p className="text-center text-xs text-slate-600 mt-6">
@@ -132,6 +145,230 @@ export default function Auth() {
           </p>
         </div>
       </motion.div>
+
+      <ResetPasswordModal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        initialEmail={email}
+      />
     </div>
+  )
+}
+
+/* ── Reset password modal — 3 steps: email → code → new password ── */
+function ResetPasswordModal({
+  open,
+  onClose,
+  initialEmail,
+}: {
+  open: boolean
+  onClose: () => void
+  initialEmail: string
+}) {
+  const [step, setStep]           = useState<1 | 2 | 3>(1)
+  const [email, setEmail]         = useState(initialEmail)
+  const [code, setCode]           = useState('')
+  const [newPassword, setNewPwd]  = useState('')
+  const [showPwd, setShowPwd]     = useState(false)
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+
+  const reset = () => {
+    setStep(1); setCode(''); setNewPwd(''); setError(null); setLoading(false)
+  }
+
+  const handleClose = () => { reset(); onClose() }
+
+  const requestCode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null); setLoading(true)
+    try {
+      await authApi.forgotPassword(email)
+      setStep(2)
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors de l\'envoi')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submitReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null); setLoading(true)
+    try {
+      await authApi.resetPassword(email, code.trim(), newPassword)
+      setStep(3)
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors de la réinitialisation')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={handleClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-2xl p-7 shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={handleClose}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition-colors"
+              aria-label="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                <KeyRound className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-semibold text-lg">
+                  {step === 3 ? 'Succès' : 'Réinitialiser le mot de passe'}
+                </h2>
+                <p className="text-slate-400 text-xs">
+                  {step === 1 && 'Entrez votre email pour recevoir un code'}
+                  {step === 2 && `Code envoyé à ${email}`}
+                  {step === 3 && 'Votre mot de passe a été modifié'}
+                </p>
+              </div>
+            </div>
+
+            {/* Step 1 — Email */}
+            {step === 1 && (
+              <form onSubmit={requestCode} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-300">Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="votre@email.com"
+                      className="pl-9 bg-slate-800/60 border-slate-700 text-white placeholder:text-slate-500 focus-visible:border-blue-500"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                    {error}
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-11 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white shadow-lg shadow-blue-600/30 border-0"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Envoyer le code'}
+                </Button>
+              </form>
+            )}
+
+            {/* Step 2 — Code + new password */}
+            {step === 2 && (
+              <form onSubmit={submitReset} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-300">Code reçu (6 chiffres)</label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    placeholder="123456"
+                    className="bg-slate-800/60 border-slate-700 text-white text-center tracking-[0.5em] text-lg font-mono placeholder:text-slate-600 focus-visible:border-blue-500"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-300">Nouveau mot de passe</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <Input
+                      type={showPwd ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      placeholder="Min. 8 caractères"
+                      minLength={8}
+                      className="pl-9 pr-9 bg-slate-800/60 border-slate-700 text-white placeholder:text-slate-500 focus-visible:border-blue-500"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd(!showPwd)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                    >
+                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
+                    {error}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => { setStep(1); setError(null) }}
+                    className="flex-1 h-11 bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                  >
+                    Retour
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading || code.length !== 6}
+                    className="flex-1 h-11 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white shadow-lg shadow-blue-600/30 border-0"
+                  >
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Valider'}
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {/* Step 3 — Success */}
+            {step === 3 && (
+              <div className="text-center py-2 space-y-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <p className="text-slate-300 text-sm">
+                  Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
+                </p>
+                <Button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full h-11 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white shadow-lg shadow-blue-600/30 border-0"
+                >
+                  Retour à la connexion
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

@@ -175,6 +175,105 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   }
 })
 
+/* ── POST /api/auth/forgot-password — Generate 6-digit code ───── */
+router.post('/forgot-password', authLimiter, async (req: Request, res: Response) => {
+  const { email } = req.body
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Email invalide' })
+  }
+
+  try {
+    const user = await queryOne<{ id: string }>(
+      `SELECT id FROM users WHERE email = $1 AND is_active = true`, [email]
+    )
+
+    /* Always respond success to avoid email enumeration */
+    if (!user) {
+      return res.json({ success: true })
+    }
+
+    /* Invalidate any prior unused codes for this user */
+    await query(
+      `UPDATE password_reset_codes SET used = true
+       WHERE user_id = $1 AND used = false`,
+      [user.id]
+    )
+
+    const code      = String(Math.floor(100000 + Math.random() * 900000))
+    const codeHash  = await bcrypt.hash(code, 10)
+
+    await query(
+      `INSERT INTO password_reset_codes (user_id, email, code_hash, expires_at, ip_address)
+       VALUES ($1, $2, $3, NOW() + INTERVAL '10 minutes', $4::inet)`,
+      [user.id, email, codeHash, req.ip ?? '0.0.0.0']
+    )
+
+    /* Dev mode — log the code. Replace with real email sender later. */
+    console.log(`\n[password-reset] Code for ${email}: ${code} (expires in 10 min)\n`)
+
+    res.json({ success: true })
+  } catch (err: any) {
+    console.error('[forgot-password]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+/* ── POST /api/auth/reset-password — Verify code + update hash ── */
+router.post('/reset-password', authLimiter, async (req: Request, res: Response) => {
+  const { email, code, newPassword } = req.body
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: 'Tous les champs sont requis' })
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Mot de passe: minimum 8 caractères' })
+  }
+
+  try {
+    const row = await queryOne<{ id: string; user_id: string; code_hash: string; attempts: number }>(
+      `SELECT id, user_id, code_hash, attempts FROM password_reset_codes
+       WHERE email = $1 AND used = false AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [email]
+    )
+
+    if (!row) {
+      return res.status(400).json({ error: 'Code invalide ou expiré' })
+    }
+
+    if (row.attempts >= 5) {
+      await query(`UPDATE password_reset_codes SET used = true WHERE id = $1`, [row.id])
+      return res.status(429).json({ error: 'Trop de tentatives. Demandez un nouveau code.' })
+    }
+
+    const valid = await bcrypt.compare(String(code), row.code_hash)
+    if (!valid) {
+      await query(
+        `UPDATE password_reset_codes SET attempts = attempts + 1 WHERE id = $1`,
+        [row.id]
+      )
+      return res.status(400).json({ error: 'Code incorrect' })
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 12)
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [newHash, row.user_id]
+    )
+    await query(`UPDATE password_reset_codes SET used = true WHERE id = $1`, [row.id])
+
+    /* Revoke all refresh tokens — force re-login everywhere */
+    await query(
+      `UPDATE refresh_tokens SET revoked = true WHERE user_id = $1`,
+      [row.user_id]
+    )
+
+    res.json({ success: true })
+  } catch (err: any) {
+    console.error('[reset-password]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
 /* ── POST /api/auth/refresh — Rotation: old token revoked ─────── */
 router.post('/refresh', authLimiter, async (req: Request, res: Response) => {
   const rawToken = req.cookies?.gestiq_refresh

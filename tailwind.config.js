@@ -174,6 +174,28 @@ export default {
           from: { opacity: '0', transform: 'translateY(4px)' },
           to:   { opacity: '1', transform: 'translateY(0)' },
         },
+        'blob': {
+          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+          '33%':      { transform: 'translate(40px, -60px) scale(1.1)' },
+          '66%':      { transform: 'translate(-30px, 30px) scale(0.95)' },
+        },
+        'gradient-pan': {
+          '0%':   { backgroundPosition: '0% 50%' },
+          '50%':  { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '0% 50%' },
+        },
+        'marquee': {
+          '0%':   { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        'spotlight': {
+          '0%':   { opacity: '0', transform: 'translate(-72%, -62%) scale(0.5)' },
+          '100%': { opacity: '1', transform: 'translate(-50%, -40%) scale(1)' },
+        },
+        'float-slow': {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%':      { transform: 'translateY(-14px)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -182,6 +204,11 @@ export default {
         'slide-in':  'slide-in 0.3s ease-out',
         shimmer:     'shimmer 1.6s infinite linear',
         'count-in':  'count-in 0.4s ease-out',
+        'blob':          'blob 14s ease-in-out infinite',
+        'gradient-pan':  'gradient-pan 8s ease infinite',
+        'marquee':       'marquee 28s linear infinite',
+        'spotlight':     'spotlight 2s ease .75s 1 forwards',
+        'float-slow':    'float-slow 6s ease-in-out infinite',
       },
       boxShadow: {
         'card-hover': '0 4px 24px rgba(0,0,0,0.08)',
