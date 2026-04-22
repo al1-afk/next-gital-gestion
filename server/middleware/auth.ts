@@ -1,8 +1,19 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
-const ACCESS_SECRET  = process.env.JWT_SECRET        || 'gestiq-access-secret-change-in-prod'
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'gestiq-refresh-secret-change-in-prod'
+/* ── Secret loader: fails hard in production if env is missing ──── */
+function loadSecret(name: 'JWT_SECRET' | 'JWT_REFRESH_SECRET'): string {
+  const v = process.env[name]
+  if (v && v.length >= 32) return v
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`FATAL: ${name} must be set to a value of at least 32 characters in production`)
+  }
+  /* Dev-only stable fallback — not used in prod */
+  return `dev-${name}-fallback-${'x'.repeat(40)}`
+}
+
+const ACCESS_SECRET  = loadSecret('JWT_SECRET')
+const REFRESH_SECRET = loadSecret('JWT_REFRESH_SECRET')
 
 export interface JwtPayload {
   userId:   string
@@ -62,12 +73,21 @@ export function verifyRefreshToken(token: string): (Pick<JwtPayload, 'userId' | 
 /* Legacy alias — used during migration */
 export const signToken = signAccessToken
 
-/* RBAC — role hierarchy */
-const ROLE_RANK: Record<string, number> = { admin: 3, manager: 2, member: 1, viewer: 0 }
+/* ── RBAC role hierarchy — aligned with frontend `Role` type ───── */
+export type Role = 'admin' | 'manager' | 'commercial' | 'comptable' | 'viewer'
 
-export function requireRole(minRole: 'admin' | 'manager' | 'member') {
+const ROLE_RANK: Record<Role, number> = {
+  admin:      4,
+  manager:    3,
+  commercial: 2,
+  comptable:  2,
+  viewer:     1,
+}
+
+export function requireRole(minRole: Role) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const rank = ROLE_RANK[req.user?.role ?? ''] ?? -1
+    const role = (req.user?.role ?? '') as Role
+    const rank = ROLE_RANK[role] ?? 0
     if (rank < ROLE_RANK[minRole]) {
       return res.status(403).json({ error: 'Permissions insuffisantes' })
     }

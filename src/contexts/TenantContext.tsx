@@ -4,6 +4,7 @@ import {
 } from 'react'
 import { useParams } from 'react-router-dom'
 import { tenantApi } from '@/lib/api'
+import { currentTenantIdForCache } from '@/lib/authToken'
 
 /* ─── Types ──────────────────────────────────────────────────────── */
 export type TenantPlan = 'starter' | 'pro' | 'enterprise'
@@ -19,25 +20,14 @@ export interface Tenant {
 }
 
 interface TenantState {
-  tenant:     Tenant | null
-  loading:    boolean
-  error:      string | null
-  isDemoMode: boolean
+  tenant:  Tenant | null
+  loading: boolean
+  error:   string | null
 }
 
 interface TenantCtx extends TenantState {
   setTenantBySlug: (slug: string) => Promise<void>
   clearTenant:     () => void
-}
-
-/* ─── Demo fallback ──────────────────────────────────────────────── */
-const DEMO_TENANT: Tenant = {
-  id:            '00000000-0000-0000-0000-000000000001',
-  slug:          'demo',
-  name:          'GestiQ Demo',
-  plan:          'pro',
-  logo_url:      null,
-  primary_color: '#2563EB',
 }
 
 /* ─── Context ────────────────────────────────────────────────────── */
@@ -47,10 +37,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>()
 
   const [state, setState] = useState<TenantState>({
-    tenant:     null,
-    loading:    true,
-    error:      null,
-    isDemoMode: false,
+    tenant:  null,
+    loading: true,
+    error:   null,
   })
 
   const setTenantBySlug = useCallback(async (slug: string) => {
@@ -58,25 +47,26 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     try {
       const data = await tenantApi.resolve(slug)
       setState({
-        tenant:     { ...data, plan: data.plan as TenantPlan, is_active: true },
-        loading:    false,
-        error:      null,
-        isDemoMode: slug === 'demo',
+        tenant:  { ...data, plan: data.plan as TenantPlan, is_active: true },
+        loading: false,
+        error:   null,
       })
       sessionStorage.setItem('gestiq_tenant_slug', slug)
-    } catch {
-      /* Fallback to demo tenant so app still renders */
+    } catch (e: any) {
+      /* No silent demo fallback — an unknown slug is an error state.
+         The UI layer (`ProtectedRoute` + Landing) is responsible for
+         redirecting; rendering app chrome with a fake tenant_id was
+         masking the multi-tenancy bug in production. */
       setState({
-        tenant:     { ...DEMO_TENANT, slug },
-        loading:    false,
-        error:      null,
-        isDemoMode: true,
+        tenant:  null,
+        loading: false,
+        error:   e?.message ?? 'Workspace introuvable',
       })
     }
   }, [])
 
   const clearTenant = useCallback(() => {
-    setState({ tenant: null, loading: false, error: null, isDemoMode: false })
+    setState({ tenant: null, loading: false, error: null })
     sessionStorage.removeItem('gestiq_tenant_slug')
   }, [])
 
@@ -98,7 +88,12 @@ export function useTenant(): TenantCtx {
   return ctx
 }
 
-export function useTenantId(): string {
+/** Returns the authoritative tenant UUID from the JWT. The context's
+ *  `tenant.id` is kept in sync by the resolve call, but we always
+ *  fall back to the token so this can't silently return the demo id. */
+export function useTenantId(): string | null {
   const { tenant } = useTenant()
-  return tenant?.id ?? DEMO_TENANT.id
+  if (tenant?.id) return tenant.id
+  const fromToken = currentTenantIdForCache()
+  return fromToken === '__anon__' ? null : fromToken
 }

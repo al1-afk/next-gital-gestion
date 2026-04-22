@@ -1,0 +1,96 @@
+import { Request, Response, NextFunction } from 'express'
+import type { Role } from './auth'
+
+/* ─────────────────────────────────────────────────────────────────
+   RBAC matrix for table CRUD routes.
+
+   Mirrors the frontend `ROLE_PERMISSIONS` map in
+   [src/lib/permissions.ts], but enforced server-side — the frontend
+   map is a UX hint, this one is the security boundary.
+
+   Key = table name (same as route :table param).
+   Value = set of roles allowed to perform the HTTP method.
+───────────────────────────────────────────────────────────────── */
+
+type Action = 'view' | 'create' | 'edit' | 'delete'
+
+const METHOD_TO_ACTION: Record<string, Action> = {
+  GET:    'view',
+  POST:   'create',
+  PATCH:  'edit',
+  PUT:    'edit',
+  DELETE: 'delete',
+}
+
+const ALL: Role[] = ['admin', 'manager', 'commercial', 'comptable', 'viewer']
+
+function rw(roles: Role[]): Record<Action, Role[]> {
+  return { view: roles, create: roles, edit: roles, delete: roles }
+}
+
+function ro(roles: Role[]): Record<Action, Role[]> {
+  return { view: roles, create: [], edit: [], delete: [] }
+}
+
+function matrix(
+  view:   Role[],
+  create: Role[] = view,
+  edit:   Role[] = create,
+  del:    Role[] = ['admin'],
+): Record<Action, Role[]> {
+  return { view, create, edit, delete: del }
+}
+
+/* Canonical permission map. Undefined table → admin-only. */
+const TABLE_ACL: Record<string, Record<Action, Role[]>> = {
+  clients:              matrix(ALL,                             ['admin','manager','commercial'], ['admin','manager','commercial'], ['admin','manager']),
+  prospects:            matrix(ALL,                             ['admin','manager','commercial'], ['admin','manager','commercial'], ['admin','manager']),
+  devis:                matrix(ALL,                             ['admin','manager','commercial'], ['admin','manager','commercial'], ['admin','manager']),
+  factures:             matrix(ALL,                             ['admin','manager','commercial','comptable'], ['admin','manager','comptable'], ['admin','manager','comptable']),
+  paiements:            matrix(ALL,                             ['admin','manager','comptable'],              ['admin','manager','comptable'], ['admin','comptable']),
+  depenses:             matrix(['admin','manager','comptable'], ['admin','comptable'],                        ['admin','comptable'],            ['admin','comptable']),
+  contrats:             matrix(ALL,                             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  produits:             matrix(ALL,                             ['admin','manager','commercial'],             ['admin','manager','commercial'], ['admin','manager']),
+  fournisseurs:         matrix(['admin','manager','comptable'], ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  team_members:         matrix(['admin','manager','comptable'], ['admin'],                                    ['admin'],                        ['admin']),
+  domaines:             matrix(ALL,                             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  hebergements:         matrix(ALL,                             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  cheques_recus:        matrix(['admin','manager','comptable'], ['admin','manager','comptable'],              ['admin','comptable'],            ['admin','comptable']),
+  cheques_emis:         matrix(['admin','manager','comptable'], ['admin','manager','comptable'],              ['admin','comptable'],            ['admin','comptable']),
+  abonnements:          matrix(ALL,                             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  client_subscriptions: matrix(ALL,                             ['admin','manager','commercial'],             ['admin','manager','commercial'], ['admin','manager']),
+  taches:               rw(ALL),
+  automation_rules:     matrix(['admin','manager'],             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  automation_logs:      ro(['admin','manager']),
+  alerts:               { view: ALL, create: ['admin','manager'], edit: ALL, delete: ALL },
+  calendrier_events:    rw(ALL),
+  bank_accounts:        matrix(['admin','manager','comptable'], ['admin'],                                    ['admin','comptable'],            ['admin']),
+  credits_dettes:       matrix(['admin','manager','comptable'], ['admin','manager','comptable'],              ['admin','manager','comptable'], ['admin','comptable']),
+  bons_commande:        matrix(['admin','manager','commercial','comptable'], ['admin','manager','commercial'], ['admin','manager','commercial'], ['admin','manager']),
+  conges:               matrix(['admin','manager'],             ['admin','manager'],                          ['admin','manager'],              ['admin']),
+  salaires_paiements:   matrix(['admin','comptable'],           ['admin','comptable'],                        ['admin','comptable'],            ['admin']),
+  tache_actions:        rw(ALL),
+  personal_tasks:       rw(ALL),
+}
+
+export function canTableAction(role: Role, table: string, action: Action): boolean {
+  const allowed = TABLE_ACL[table]?.[action]
+  if (!allowed) return false
+  return allowed.includes(role)
+}
+
+/* Express middleware — call AFTER requireAuth, on routes with :table param */
+export function tableRbac(req: Request, res: Response, next: NextFunction) {
+  const rawTable = req.params.table
+  const table    = Array.isArray(rawTable) ? rawTable[0] : rawTable
+  const action   = METHOD_TO_ACTION[req.method]
+  const role     = (req.user?.role ?? '') as Role
+
+  if (!table || !action || !role) {
+    return res.status(401).json({ error: 'Non authentifié' })
+  }
+  if (!canTableAction(role, table, action)) {
+    return res.status(403).json({ error: 'Permissions insuffisantes pour cette action' })
+  }
+  next()
+}

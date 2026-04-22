@@ -2,9 +2,11 @@ import { Router, Request, Response } from 'express'
 import { tenantQuery, tenantQueryOne } from '../db/pool'
 import { requireAuth } from '../middleware/auth'
 import { safeColumn } from '../middleware/security'
+import { tableRbac } from '../middleware/rbac'
 
 const router = Router()
 router.use(requireAuth)
+router.use('/:table', tableRbac)
 
 const ALLOWED_TABLES = new Set([
   'clients', 'prospects', 'devis', 'factures', 'paiements',
@@ -14,7 +16,10 @@ const ALLOWED_TABLES = new Set([
   'automation_rules', 'automation_logs', 'alerts',
   'calendrier_events', 'bank_accounts', 'credits_dettes',
   'bons_commande', 'conges', 'salaires_paiements', 'tache_actions',
+  'personal_tasks',
 ])
+
+const isProd = process.env.NODE_ENV === 'production'
 
 const SAFE_COL = /^[a-z_][a-z0-9_]{0,63}$/
 
@@ -26,9 +31,16 @@ function guardTable(table: string, res: Response): boolean {
   return true
 }
 
+/* Express 5 types req.params[key] as string | string[]; our routes
+   always receive a single segment, so narrow once at the top. */
+function tableParam(req: Request): string {
+  const t = req.params.table
+  return Array.isArray(t) ? (t[0] ?? '') : (t ?? '')
+}
+
 /* ── GET /api/:table ─────────────────────────────────────────── */
 router.get('/:table', async (req: Request, res: Response) => {
-  const { table } = req.params
+  const table = tableParam(req)
   if (!guardTable(table, res)) return
 
   const tenantId = req.user!.tenantId
@@ -52,7 +64,8 @@ router.get('/:table', async (req: Request, res: Response) => {
 
 /* ── GET /api/:table/:id ─────────────────────────────────────── */
 router.get('/:table/:id', async (req: Request, res: Response) => {
-  const { table, id } = req.params
+  const table = tableParam(req)
+  const { id } = req.params
   if (!guardTable(table, res)) return
 
   try {
@@ -77,7 +90,7 @@ function normalizeValues(obj: Record<string, unknown>): Record<string, unknown> 
 
 /* ── POST /api/:table ────────────────────────────────────────── */
 router.post('/:table', async (req: Request, res: Response) => {
-  const { table } = req.params
+  const table = tableParam(req)
   if (!guardTable(table, res)) return
 
   const raw  = { ...req.body, tenant_id: req.user!.tenantId }
@@ -96,13 +109,15 @@ router.post('/:table', async (req: Request, res: Response) => {
     res.status(201).json(row)
   } catch (err: any) {
     console.error(`[POST /api/${table}]`, err?.code, err?.message, err?.detail, { keys })
+    if (isProd) return res.status(500).json({ error: 'Erreur serveur' })
     res.status(500).json({ error: `DB ${err?.code ?? ''}: ${err?.message ?? 'Erreur serveur'}`, detail: err?.detail })
   }
 })
 
 /* ── PATCH /api/:table/:id ───────────────────────────────────── */
 router.patch('/:table/:id', async (req: Request, res: Response) => {
-  const { table, id } = req.params
+  const table = tableParam(req)
+  const { id } = req.params
   if (!guardTable(table, res)) return
 
   const data = normalizeValues(Object.fromEntries(
@@ -125,13 +140,15 @@ router.patch('/:table/:id', async (req: Request, res: Response) => {
     res.json(row)
   } catch (err: any) {
     console.error(`[PATCH /api/${table}/${id}]`, err?.code, err?.message, err?.detail, { keys })
+    if (isProd) return res.status(500).json({ error: 'Erreur serveur' })
     res.status(500).json({ error: `DB ${err?.code ?? ''}: ${err?.message ?? 'Erreur serveur'}`, detail: err?.detail })
   }
 })
 
 /* ── DELETE /api/:table/:id ──────────────────────────────────── */
 router.delete('/:table/:id', async (req: Request, res: Response) => {
-  const { table, id } = req.params
+  const table = tableParam(req)
+  const { id } = req.params
   if (!guardTable(table, res)) return
 
   try {
