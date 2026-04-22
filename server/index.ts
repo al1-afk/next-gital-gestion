@@ -39,6 +39,8 @@ app.use(helmet({
   },
   hsts: isProd ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
   crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy:   { policy: 'same-origin-allow-popups' },
 }))
 
 app.set('trust proxy', 1)
