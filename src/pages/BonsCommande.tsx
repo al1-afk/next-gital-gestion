@@ -74,6 +74,7 @@ export default function BonsCommande() {
 
       <div className="card-premium overflow-hidden">
         {isLoading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
+          <div className="table-scroll">
           <table className="w-full">
             <thead className="table-header"><tr><th>N° BC</th><th>Fournisseur</th><th>Objet</th><th>Date</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
             <tbody>
@@ -94,6 +95,7 @@ export default function BonsCommande() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {!isLoading && filteredBons.length === 0 && <div className="empty-state"><ShoppingCart className="empty-state-icon" /><p className="empty-state-title">Aucun bon de commande</p></div>}
       </div>

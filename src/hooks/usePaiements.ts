@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { paiementsApi } from '@/lib/api'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export type PaiementMethode = 'especes' | 'virement' | 'carte_bancaire' | 'paypal' | 'cheque' | 'prelevement'
@@ -26,7 +27,7 @@ const KEY = 'paiements'
 
 export function usePaiements() {
   return useQuery<Paiement[]>({
-    queryKey: [KEY],
+    queryKey: [KEY, currentTenantIdForCache()],
     queryFn:  () => paiementsApi.list({ orderBy: 'date', order: 'desc' }) as Promise<Paiement[]>,
     staleTime: 1000 * 60 * 2,
   })

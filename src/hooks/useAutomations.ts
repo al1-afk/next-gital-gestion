@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
+import { currentTenantIdForCache } from '@/lib/authToken'
 
 export type AutoTrigger =
   | 'invoice_overdue'
@@ -55,8 +56,11 @@ export interface AutoLog {
   executed_at:  string
 }
 
-const RULES_KEY = 'ng_automation_rules'
-const LOGS_KEY  = 'ng_automation_logs'
+/* Per-tenant keys — cleared on logout by purgeClientSession().
+   Prefix starts with `automation_` which matches
+   LOCAL_STORAGE_TENANT_PREFIXES in lib/session.ts. */
+const rulesKey = () => `automation_rules_${currentTenantIdForCache()}`
+const logsKey  = () => `automation_logs_${currentTenantIdForCache()}`
 
 const DEFAULT_RULES: AutoRule[] = [
   {
@@ -124,26 +128,26 @@ const DEFAULT_LOGS: AutoLog[] = [
 
 function loadRules(): AutoRule[] {
   try {
-    const stored = localStorage.getItem(RULES_KEY)
+    const stored = localStorage.getItem(rulesKey())
     if (stored) return JSON.parse(stored)
   } catch {}
   return DEFAULT_RULES
 }
 
 function saveRules(rules: AutoRule[]) {
-  try { localStorage.setItem(RULES_KEY, JSON.stringify(rules)) } catch {}
+  try { localStorage.setItem(rulesKey(), JSON.stringify(rules)) } catch {}
 }
 
 function loadLogs(): AutoLog[] {
   try {
-    const stored = localStorage.getItem(LOGS_KEY)
+    const stored = localStorage.getItem(logsKey())
     if (stored) return JSON.parse(stored)
   } catch {}
   return DEFAULT_LOGS
 }
 
 function saveLogs(logs: AutoLog[]) {
-  try { localStorage.setItem(LOGS_KEY, JSON.stringify(logs)) } catch {}
+  try { localStorage.setItem(logsKey(), JSON.stringify(logs)) } catch {}
 }
 
 export function useAutomations() {

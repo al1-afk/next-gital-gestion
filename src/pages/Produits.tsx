@@ -65,6 +65,7 @@ export default function Produits() {
 
       <div className="card-premium overflow-hidden">
         {isLoading ? <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div> : (
+          <div className="table-scroll">
           <table className="w-full">
             <thead className="table-header"><tr><th>Nom</th><th>Description</th><th>Type</th><th>Prix HT</th><th>TVA</th><th>Prix TTC</th><th></th></tr></thead>
             <tbody>
@@ -85,6 +86,7 @@ export default function Produits() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {!isLoading && filtered.length === 0 && <div className="empty-state"><Package className="empty-state-icon" /><p className="empty-state-title">Aucun produit</p></div>}
       </div>

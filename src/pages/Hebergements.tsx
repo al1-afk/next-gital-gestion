@@ -70,7 +70,7 @@ export default function Hebergements() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="card-premium p-5 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center flex-shrink-0">
             <Server className="w-5 h-5 text-purple-600 dark:text-purple-400" />

@@ -322,7 +322,7 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[480px] bg-[var(--surface-card)] border-l border-border shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[480px] bg-[var(--surface-card)] border-l border-border shadow-2xl flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           >
 
             {/* ── HERO HEADER ── */}
@@ -582,7 +582,7 @@ function ProspectDrawer({ open, prospect, onClose }: DrawerProps) {
                       <textarea
                         value={form.notes}
                         onChange={set('notes')}
-                        className="input-field resize-none h-28 text-sm"
+                        className="input-field resize-none h-28"
                         placeholder="Contexte, points clés, prochaines étapes…"
                       />
                       {form.notes.length > 0 && (
@@ -1195,7 +1195,7 @@ export default function Prospects() {
           </AnimatePresence>
 
           <div className="card-premium overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
               <table className="w-full text-sm">
                 <thead className="table-header">
                   <tr>

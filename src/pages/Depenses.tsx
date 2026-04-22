@@ -466,6 +466,7 @@ export default function Depenses() {
             {(tableDeps ?? monthData.monthDeps).length} entrée(s)
           </span>
         </div>
+        <div className="table-scroll">
         <table className="w-full">
           <thead className="table-header">
             <tr>
@@ -531,6 +532,7 @@ export default function Depenses() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

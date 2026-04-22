@@ -20,7 +20,7 @@ import { useAlerts }    from '@/hooks/useAlerts'
 import { useCountUp }   from '@/hooks/useCountUp'
 import { useClientSubscriptions, computeMrrMetrics } from '@/hooks/useClientSubscriptions'
 import { computeCashFlowProjection, detectAnomalies } from '@/lib/intelligence'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatCurrencyCompact, formatDate, useIsMobileViewport } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -114,10 +114,10 @@ function KpiCard({
         )}
       </div>
 
-      <div>
-        <p className="text-2xl font-extrabold tracking-tight" style={{ color: iconColor }}>{display}</p>
+      <div className="min-w-0">
+        <p className="text-xl sm:text-2xl font-extrabold tracking-tight truncate" style={{ color: iconColor }}>{display}</p>
         <p className="text-[11px] font-semibold uppercase tracking-wide mt-0.5 text-slate-500 dark:text-slate-400">{label}</p>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">{sub}</p>
       </div>
 
       <div className="-mx-1">
@@ -161,6 +161,8 @@ export default function Dashboard() {
   const cashflow   = useMemo(() => computeCashFlowProjection(factures, depenses), [factures, depenses])
   const anomalies  = useMemo(() => detectAnomalies(factures, prospects, depenses), [factures, prospects, depenses])
   const mrrMetrics = useMemo(() => computeMrrMetrics(subs), [subs])
+  const isMobile   = useIsMobileViewport()
+  const fmtMoney   = isMobile ? formatCurrencyCompact : formatCurrency
 
   const kpis = useMemo(() => {
     const totalCA         = factures.filter(f => f.statut === 'payee').reduce((s, f) => s + f.montant_ttc, 0)
@@ -276,7 +278,7 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="hero-card p-7 relative"
+        className="hero-card p-5 sm:p-7 relative"
       >
         {/* Content layer above ::before pseudo */}
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
@@ -299,9 +301,9 @@ export default function Dashboard() {
             {/* Inline quick stats */}
             <div className="flex flex-wrap gap-5 mt-5">
               {[
-                { label: 'CA encaissé',   value: formatCurrency(kpis.totalCA) },
+                { label: 'CA encaissé',   value: fmtMoney(kpis.totalCA) },
                 { label: 'Clients actifs',value: String(kpis.clients) },
-                { label: 'Pipeline',      value: formatCurrency(kpis.valeurPipeline) },
+                { label: 'Pipeline',      value: fmtMoney(kpis.valeurPipeline) },
               ].map(stat => (
                 <div key={stat.label}>
                   <p className="text-white font-bold text-lg leading-none">{stat.value}</p>
@@ -382,9 +384,9 @@ export default function Dashboard() {
       )}
 
       {/* ══ PASTEL KPI CARDS ════════════════════════════════════════ */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
-          label="CA Encaissé"  rawValue={kpis.totalCA}       formatter={formatCurrency}
+          label="CA Encaissé"  rawValue={kpis.totalCA}       formatter={fmtMoney}
           sub="Total encaissé ce mois"
           icon={TrendingUp}    variant="kpi-blue"     iconColor="#2563EB"
           trend={{ pct: '+12%', up: true }}
@@ -405,7 +407,7 @@ export default function Dashboard() {
           sparkData={spDevis} sparkColor="#DB2777"   delay={160}
         />
         <KpiCard
-          label="Pipeline"     rawValue={kpis.valeurPipeline} formatter={formatCurrency}
+          label="Pipeline"     rawValue={kpis.valeurPipeline} formatter={fmtMoney}
           sub={`${kpis.prospectsActifs} prospects actifs`}
           icon={Target}        variant="kpi-teal"     iconColor="#0F766E"
           trend={{ pct: '+8%', up: true }}

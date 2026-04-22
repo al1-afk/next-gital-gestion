@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { tokenStore, authApi } from '@/lib/api'
+import { logoutAndPurge, purgeClientSession } from '@/lib/session'
 
 interface AuthState {
   loading:      boolean
@@ -74,6 +75,10 @@ export function useAuth() {
     password:    string,
     tenantSlug?: string,
   ) => {
+    /* Always purge any leftover state from a previous user BEFORE
+       writing the new token — prevents cross-user data leakage. */
+    await purgeClientSession()
+
     const data = await authApi.login(email, password, tenantSlug)
     tokenStore.set(data.token)
     const payload = parseJwt(data.token)
@@ -82,7 +87,7 @@ export function useAuth() {
       isAuthorized: true,
       tenantSlug:   data.tenantSlug,
       tenantId:     data.tenantId,
-      userId:       payload?.sub ?? null,
+      userId:       payload?.userId ?? payload?.sub ?? null,
       email,
       name:         null,
       role:         data.role,
@@ -91,8 +96,8 @@ export function useAuth() {
     return data
   }, [navigate])
 
-  const signOut = useCallback(() => {
-    tokenStore.clear()
+  const signOut = useCallback(async () => {
+    await logoutAndPurge()
     setState({ ...INITIAL, loading: false })
     navigate('/auth', { replace: true })
   }, [navigate])

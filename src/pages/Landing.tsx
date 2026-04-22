@@ -184,7 +184,7 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-clip">
+    <div className="min-h-[100dvh] bg-slate-50 text-slate-900 overflow-x-clip">
 
       {/* ── Nav ─────────────────────────────────────────────── */}
       <motion.nav

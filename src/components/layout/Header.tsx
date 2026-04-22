@@ -147,23 +147,27 @@ export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
   return (
     <header
       className={cn(
-        'fixed top-0 right-0 h-16 z-30 flex items-center justify-between px-5',
+        'fixed top-0 right-0 h-14 md:h-16 z-30 flex items-center justify-between px-3 md:px-5',
         'border-b transition-all duration-300',
         'bg-white/95 border-[#E5E7EB]',
         'dark:bg-[#050d1a]/95 dark:border-slate-800/80',
         'backdrop-blur-sm',
-        collapsed ? 'left-16' : 'left-64',
+        'pt-[env(safe-area-inset-top)]',
+        // Mobile: sidebar is a drawer (hidden by default) → header spans full width
+        // Desktop (md+): align with the sidebar (64px collapsed / 256px expanded)
+        'left-0',
+        collapsed ? 'md:left-16' : 'md:left-64',
       )}
     >
       {/* ── Left ── */}
-      <div className="flex items-center gap-3">
-        <button onClick={onMenuToggle} className={iconBtn} aria-label="Menu">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+        <button onClick={onMenuToggle} className={cn(iconBtn, 'flex-shrink-0')} aria-label="Menu">
           <Menu className="w-5 h-5" />
         </button>
-        <nav className="flex items-center gap-1.5 text-sm">
-          <span className="text-slate-400 dark:text-slate-500 font-medium">GestiQ</span>
-          <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
-          <span className="font-semibold text-slate-700 dark:text-slate-200 capitalize">
+        <nav className="flex items-center gap-1.5 text-sm min-w-0">
+          <span className="text-slate-400 dark:text-slate-500 font-medium hidden sm:inline">GestiQ</span>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600 flex-shrink-0 hidden sm:block" />
+          <span className="font-semibold text-slate-700 dark:text-slate-200 capitalize truncate">
             {currentPage}
           </span>
         </nav>
@@ -222,7 +226,8 @@ export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
                   exit={{    opacity: 0, y: -8, scale: 0.95 }}
                   transition={{ duration: 0.15 }}
                   className={cn(
-                    'absolute right-0 top-11 z-50 w-[360px] rounded-2xl shadow-xl border overflow-hidden',
+                    'absolute right-0 top-11 z-50 rounded-2xl shadow-xl border overflow-hidden',
+                    'w-[calc(100vw-1rem)] max-w-[360px] sm:w-[360px]',
                     'bg-white dark:bg-[#0d1829]',
                     'border-slate-200 dark:border-slate-700/80',
                   )}

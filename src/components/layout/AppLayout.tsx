@@ -13,6 +13,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus'
 import { useOfflineSync } from '@/hooks/useOfflineSync'
 import PwaInstallBanner from '@/components/PwaInstallBanner'
 import ShortcutsModal from '@/components/ShortcutsModal'
+import OfflineBanner from '@/components/OfflineBanner'
 
 function getSavedCollapsed(): boolean {
   try { return localStorage.getItem('sidebar-collapsed') === 'true' }
@@ -39,7 +40,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       {/* ── Desktop sidebar ── */}
       <div className="hidden md:block">
         <Sidebar collapsed={collapsed} onToggle={handleToggle} />
@@ -57,7 +58,7 @@ export default function AppLayout() {
             <motion.div
               initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-              className="fixed left-0 top-0 h-screen z-50 md:hidden"
+              className="fixed left-0 top-0 h-[100dvh] z-50 md:hidden"
             >
               <Sidebar collapsed={false} onToggle={() => setMobileOpen(false)} />
               <button
@@ -94,17 +95,18 @@ export default function AppLayout() {
 
       <main
         className={cn(
-          'pt-16 transition-all duration-300 min-h-screen',
+          'pt-14 md:pt-16 transition-all duration-300 min-h-[100dvh]',
           'pl-0 md:pl-64',
           collapsed && 'md:pl-16',
         )}
       >
+        <OfflineBanner />
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="p-4 md:p-8"
+          className="p-4 sm:p-6 md:p-8 pb-[calc(1rem+env(safe-area-inset-bottom))]"
         >
           <Outlet />
         </motion.div>

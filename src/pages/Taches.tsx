@@ -865,7 +865,7 @@ export default function Taches() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 420, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed top-0 right-0 h-full w-[400px] bg-card border-l border-border shadow-xl z-40 flex flex-col"
+            className="fixed top-0 right-0 h-[100dvh] w-full sm:w-[400px] max-w-full bg-card border-l border-border shadow-xl z-40 flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           >
             <ActionDrawer
               action={selectedAction as Action & { impact_score: number }}
@@ -993,7 +993,7 @@ export default function Taches() {
               <textarea
                 value={newAction.description ?? ''}
                 onChange={e => setNewAction(p => ({ ...p, description: e.target.value }))}
-                className="input-field resize-none h-16 text-sm"
+                className="input-field resize-none h-16"
                 placeholder="Contexte, détails importants..."
               />
             </div>

@@ -107,6 +107,7 @@ export default function ChequesRecus() {
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>
         ) : (
+          <div className="table-scroll">
           <table className="w-full">
             <thead className="table-header">
               <tr><th>Référence</th><th>Émetteur</th><th>Banque</th><th>Réception</th><th>Dépôt</th><th>Montant</th><th>Statut</th><th></th></tr>
@@ -131,6 +132,7 @@ export default function ChequesRecus() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {!isLoading && filteredCheques.length === 0 && (
           <div className="empty-state"><Banknote className="empty-state-icon" /><p className="empty-state-title">Aucun chèque</p></div>

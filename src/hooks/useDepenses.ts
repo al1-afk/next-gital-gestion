@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { depensesApi } from '@/lib/api'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export interface Depense {
@@ -16,7 +17,7 @@ const KEY = 'depenses'
 
 export function useDepenses() {
   return useQuery<Depense[]>({
-    queryKey: [KEY],
+    queryKey: [KEY, currentTenantIdForCache()],
     queryFn:  () => depensesApi.list({ orderBy: 'date_depense', order: 'desc' }) as Promise<Depense[]>,
     staleTime: 1000 * 60 * 3,
   })

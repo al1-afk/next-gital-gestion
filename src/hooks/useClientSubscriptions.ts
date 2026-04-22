@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { clientSubsApi } from '@/lib/api'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export interface ClientSubscription {
@@ -42,7 +43,7 @@ const KEY = 'client_subscriptions'
 
 export function useClientSubscriptions() {
   return useQuery<ClientSubscription[]>({
-    queryKey: [KEY],
+    queryKey: [KEY, currentTenantIdForCache()],
     queryFn:  () => clientSubsApi.list({ orderBy: 'created_at', order: 'desc' }) as Promise<ClientSubscription[]>,
     staleTime: 1000 * 60 * 2,
   })

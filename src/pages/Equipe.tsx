@@ -287,6 +287,7 @@ function CongesTab({ members }: { members: TeamMember[] }) {
 
       {/* Table */}
       <div className="card-premium overflow-hidden">
+        <div className="table-scroll">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
@@ -354,6 +355,7 @@ function CongesTab({ members }: { members: TeamMember[] }) {
             })}
           </tbody>
         </table>
+        </div>
         {conges.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <CalendarDays className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -411,7 +413,7 @@ function CongesTab({ members }: { members: TeamMember[] }) {
             <div className="space-y-1.5">
               <label className="form-label">Notes / Justification</label>
               <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                className="input-field resize-none h-16 text-sm" placeholder="Motif, documents joints…" />
+                className="input-field resize-none h-16" placeholder="Motif, documents joints…" />
             </div>
             <div className="flex justify-end gap-3 pt-1">
               <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
@@ -543,6 +545,7 @@ function SalairesTab({ members }: { members: TeamMember[] }) {
 
       {/* Table */}
       <div className="card-premium overflow-hidden">
+        <div className="table-scroll">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
@@ -640,6 +643,7 @@ function SalairesTab({ members }: { members: TeamMember[] }) {
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
@@ -743,6 +747,7 @@ function InvitationsTab() {
         </div>
       ) : (
         <div className="card-premium overflow-hidden">
+          <div className="table-scroll">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
@@ -775,6 +780,7 @@ function InvitationsTab() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
       <Dialog open={showInvite} onOpenChange={v => { setShowInvite(v); if (!v) reload() }}>
@@ -805,7 +811,7 @@ function PermissionsMatrix() {
         <Lock className="w-4 h-4 text-blue-500" />
         <h3 className="font-semibold text-sm">Matrice des permissions</h3>
       </div>
-      <div className="overflow-x-auto">
+      <div className="table-scroll">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border">

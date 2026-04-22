@@ -195,7 +195,7 @@ function EventForm({ initial, defaultDate, onSave, onClose }: {
       <div className="space-y-1.5">
         <label className="form-label">Notes</label>
         <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-          className="input-field resize-none h-16 text-sm" placeholder="Ordre du jour, contexte…" />
+          className="input-field resize-none h-16" placeholder="Ordre du jour, contexte…" />
       </div>
       <div className="flex justify-end gap-3 pt-1">
         <Button type="button" variant="secondary" onClick={onClose}>Annuler</Button>

@@ -25,7 +25,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatCurrencyCompact, formatDate, useIsMobileViewport } from '@/lib/utils'
 import { generateFacturePDF } from '@/lib/generatePdf'
 import { ImportExportButtons } from '@/components/ImportExportButtons'
 import { facturesSchema } from '@/lib/importExportSchemas'
@@ -48,6 +48,7 @@ const STATUT_CONFIG: Record<FactureStatut, { label: string; variant: BadgeVarian
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 const fmtCur = (v: number) => (v === 0 ? '—' : formatCurrency(v))
+const fmtCurCompact = (v: number) => (v === 0 ? '—' : formatCurrencyCompact(v))
 
 function paymentPercent(f: Facture): number {
   if (!f.montant_ttc || f.montant_ttc === 0) return 0
@@ -511,7 +512,7 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
           onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
           rows={3}
           placeholder="Notes internes, conditions de paiement…"
-          className="w-full rounded-lg border border-border bg-[var(--surface-input)] px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] transition-all"
+          className="w-full rounded-lg border border-border bg-[var(--surface-input)] px-3 py-2 text-base sm:text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] transition-all"
         />
       </div>
 
@@ -528,6 +529,8 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
 
 /* ─── Main Page ──────────────────────────────────────────────────── */
 export default function Factures() {
+  const isMobile         = useIsMobileViewport()
+  const fmtKpi           = isMobile ? fmtCurCompact : fmtCur
   const { data: factures = [], isLoading } = useFactures()
   const createFacture    = useCreateFacture()
   const updateFacture    = useUpdateFacture()
@@ -625,14 +628,14 @@ export default function Factures() {
       </div>
 
       {/* ── KPI cards ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}
           className="card-premium p-5 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
             <Receipt className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <div>
-            <p className="text-xl font-extrabold text-foreground">{fmtCur(stats.totalTTC)}</p>
+          <div className="min-w-0">
+            <p className="text-lg sm:text-xl font-extrabold text-foreground truncate">{fmtKpi(stats.totalTTC)}</p>
             <p className="kpi-label mt-0.5">Total facturé</p>
           </div>
         </motion.div>
@@ -641,8 +644,8 @@ export default function Factures() {
           <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center flex-shrink-0">
             <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div>
-            <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{fmtCur(stats.encaisse)}</p>
+          <div className="min-w-0">
+            <p className="text-lg sm:text-xl font-extrabold text-emerald-600 dark:text-emerald-400 truncate">{fmtKpi(stats.encaisse)}</p>
             <p className="kpi-label mt-0.5">Encaissé</p>
           </div>
         </motion.div>
@@ -651,8 +654,8 @@ export default function Factures() {
           <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${stats.impaye > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
             <Clock className={`w-5 h-5 ${stats.impaye > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} />
           </div>
-          <div>
-            <p className={`text-xl font-extrabold ${stats.impaye > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>{fmtCur(stats.impaye)}</p>
+          <div className="min-w-0">
+            <p className={`text-lg sm:text-xl font-extrabold truncate ${stats.impaye > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>{fmtKpi(stats.impaye)}</p>
             <p className="kpi-label mt-0.5">En attente</p>
           </div>
         </motion.div>
@@ -720,7 +723,7 @@ export default function Factures() {
 
       {/* ── Table ───────────────────────────────────────────────── */}
       <div className="card-premium overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="w-full">
             <thead className="table-header">
               <tr className="table-header">

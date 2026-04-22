@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { teamApi } from '@/lib/api'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export interface TeamMember {
@@ -21,7 +22,7 @@ const KEY = 'team_members'
 
 export function useTeam() {
   return useQuery<TeamMember[]>({
-    queryKey: [KEY],
+    queryKey: [KEY, currentTenantIdForCache()],
     queryFn:  () => teamApi.list({ orderBy: 'created_at', order: 'desc' }) as Promise<TeamMember[]>,
     staleTime: 1000 * 60 * 5,
   })

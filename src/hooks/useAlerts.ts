@@ -1,8 +1,9 @@
 import { useMemo, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useFactures } from './useFactures'
 import { useProspects } from './useProspects'
 import { useDepenses } from './useDepenses'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { detectAnomalies, computeCashFlowProjection } from '@/lib/intelligence'
 
 export type AlertPriority = 'low' | 'medium' | 'critical'
@@ -25,24 +26,27 @@ export interface Alert {
   created_at:  string
 }
 
-const STORAGE_KEY = 'ng_alerts_read'
+/* Per-tenant key so two users on the same browser don't share
+   their "already dismissed" alert list. Global prefix is cleared
+   on logout by purgeClientSession(). */
+const storageKey = () => `gestiq_alerts_read_${currentTenantIdForCache()}`
 
 function getReadIds(): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'))
+    return new Set(JSON.parse(localStorage.getItem(storageKey()) ?? '[]'))
   } catch { return new Set() }
 }
 
 function markRead(id: string) {
   const ids = getReadIds()
   ids.add(id)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]))
+  localStorage.setItem(storageKey(), JSON.stringify([...ids]))
 }
 
 function markAllRead(ids: string[]) {
   const existing = getReadIds()
   ids.forEach(id => existing.add(id))
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing]))
+  localStorage.setItem(storageKey(), JSON.stringify([...existing]))
 }
 
 function daysBetween(dateStr: string | null): number {

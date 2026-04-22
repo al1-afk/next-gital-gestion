@@ -1115,7 +1115,7 @@ function DevisPreviewModal({ devis: d, client, onClose }: { devis: Devis; client
 
   return (
     <Dialog open onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="max-w-3xl max-h-[95vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-3xl max-h-[95dvh] overflow-y-auto p-0 gap-0">
 
         {/* ── Toolbar */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-[#0a1430] sticky top-0 z-10">
@@ -1454,7 +1454,7 @@ export default function DevisPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         {[
           { label: 'Total pipeline', value: formatCurrency(stats.total),     color: 'text-foreground' },
           { label: 'Acceptés',       value: formatCurrency(stats.acceptes),  color: 'text-emerald-600 dark:text-emerald-400' },
@@ -1489,7 +1489,7 @@ export default function DevisPage() {
 
       {/* Table */}
       <div className="card-premium overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll">
           <table className="w-full text-sm">
             <thead>
               <tr className="table-header">
@@ -1602,8 +1602,8 @@ export default function DevisPage() {
       >
         <DialogContent
           className={wizardStep === 2
-            ? '!left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-screen !max-h-screen !p-0 !gap-0 !rounded-none !overflow-hidden [&>button:last-child]:hidden'
-            : 'max-w-2xl max-h-[90vh] overflow-y-auto'
+            ? '!left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-[100dvh] !max-h-[100dvh] !p-0 !gap-0 !rounded-none !overflow-hidden [&>button:last-child]:hidden'
+            : 'max-w-2xl max-h-[90dvh] overflow-y-auto'
           }
         >
           {wizardStep === 1 && (

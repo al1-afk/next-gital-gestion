@@ -1,24 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+/**
+ * Tracks online/offline status.
+ * The persistent offline indicator is rendered by <OfflineBanner /> (push-down, not overlay).
+ * This hook only surfaces a one-shot success toast when the connection comes back.
+ */
 export function useNetworkStatus() {
-  const [online, setOnline] = useState(navigator.onLine)
+  const [online, setOnline] = useState(() => navigator.onLine)
+  const wasOffline = useRef(!navigator.onLine)
 
   useEffect(() => {
     const handleOnline = () => {
       setOnline(true)
-      toast.success('Connexion rétablie', {
-        description: 'Vos données se synchronisent…',
-        duration: 3000,
-      })
+      if (wasOffline.current) {
+        toast.success('Connexion rétablie', {
+          description: 'Vos données se synchronisent…',
+          duration: 3000,
+        })
+        wasOffline.current = false
+      }
     }
     const handleOffline = () => {
       setOnline(false)
-      toast.error('Hors ligne', {
-        description: "L'application fonctionne en mode lecture.",
-        duration: Infinity,
-        id: 'offline-toast',
-      })
+      wasOffline.current = true
     }
 
     window.addEventListener('online',  handleOnline)

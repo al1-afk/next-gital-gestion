@@ -33,14 +33,14 @@ export default function DevisPreview() {
 
   /* ── Loading ── */
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex items-center justify-center min-h-[100dvh]">
       <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
     </div>
   )
 
   /* ── Not found ── */
   if (!devis) return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+    <div className="flex flex-col items-center justify-center min-h-[100dvh] gap-4">
       <p className="text-muted-foreground">Devis introuvable.</p>
       <Button variant="secondary" onClick={() => navigate('/devis')}>
         <ArrowLeft className="w-4 h-4 mr-2" /> Retour aux devis
@@ -50,7 +50,7 @@ export default function DevisPreview() {
 
   return (
     /* Page background */
-    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-900 overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-slate-100 dark:bg-slate-900 overflow-hidden">
 
       {/* ── Top bar (fixed) ──────────────────────────────── */}
       <div className="flex-shrink-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm px-5 py-3">

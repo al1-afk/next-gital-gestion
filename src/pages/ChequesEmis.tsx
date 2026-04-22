@@ -77,7 +77,7 @@ export default function ChequesEmis() {
         <DateRangeFilter value={dateRange} onChange={setDateRange} />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="card-premium p-5 flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center flex-shrink-0">
             <TrendingDown className="w-5 h-5 text-red-600 dark:text-red-400" />
@@ -102,6 +102,7 @@ export default function ChequesEmis() {
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground text-sm">Chargement...</div>
         ) : (
+          <div className="table-scroll">
           <table className="w-full">
             <thead className="table-header">
               <tr><th>Référence</th><th>Bénéficiaire</th><th>Banque</th><th>Date émission</th><th>Montant</th><th>Statut</th><th></th></tr>
@@ -125,6 +126,7 @@ export default function ChequesEmis() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {!isLoading && filteredCheques.length === 0 && (
           <div className="empty-state"><Wallet className="empty-state-icon" /><p className="empty-state-title">Aucun chèque émis</p></div>

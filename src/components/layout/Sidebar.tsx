@@ -104,9 +104,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen z-40 flex flex-col transition-all duration-300',
+        'fixed left-0 top-0 h-[100dvh] z-40 flex flex-col transition-all duration-300',
         'border-r border-slate-200/80 dark:border-slate-800/60',
         'bg-white dark:bg-[#060d1c]',
+        'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]',
         collapsed ? 'w-16' : 'w-64',
       )}
     >

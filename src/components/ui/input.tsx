@@ -16,8 +16,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          // Layout
-          'flex h-10 w-full rounded-lg px-3 py-2 text-sm',
+          // Layout — text-base (16px) on mobile to prevent iOS Safari zoom on focus
+          'flex h-10 w-full rounded-lg px-3 py-2 text-base sm:text-sm',
           // Colors — light
           'border border-border bg-[var(--surface-input)] text-foreground',
           'placeholder:text-[#B4B2A9] dark:placeholder:text-slate-500',

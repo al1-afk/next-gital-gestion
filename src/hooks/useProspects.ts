@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { prospectsOffline } from '@/lib/offline/prospectsOffline'
+import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export type ProspectStatut = 'nouveau' | 'contacte' | 'qualifie' | 'proposition' | 'gagne' | 'perdu'
@@ -38,7 +39,7 @@ const KEY = 'prospects'
 
 export function useProspects() {
   return useQuery<Prospect[]>({
-    queryKey: [KEY],
+    queryKey: [KEY, currentTenantIdForCache()],
     queryFn:  () => prospectsOffline.list({ orderBy: 'created_at', order: 'desc' }),
     staleTime: 1000 * 60 * 2,
   })
