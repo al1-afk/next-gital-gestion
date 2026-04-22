@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.env
+.env.local
+.env.production
+src
+public
+scripts
+deploy
+supabase
+*.md
