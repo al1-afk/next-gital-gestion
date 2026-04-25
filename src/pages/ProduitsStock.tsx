@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Plus, Search, Trash2, Pencil, Package, Tags, Boxes, ArrowLeftRight,
   Truck, AlertTriangle, X, TrendingUp, TrendingDown, RefreshCw,
+  ReceiptText, ShoppingCart, Eye, Ban, Minus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +22,9 @@ import {
   useStockProducts,    useCreateStockProduct,   useUpdateStockProduct,   useDeleteStockProduct,
   useStockMovements,   useCreateStockMovement,
   useStockAlerts,
+  useStockTickets, useStockTicket, useStockTicketStats, useCreateStockTicket, useCancelStockTicket,
   type StockCategory, type StockSupplier, type StockProduct, type MovementType,
+  type TicketPaymentMethod,
 } from '@/hooks/useStock'
 import { cn, formatCurrency } from '@/lib/utils'
 import { ImportExportButtons } from '@/components/ImportExportButtons'
@@ -56,6 +59,7 @@ export default function ProduitsStock() {
       <Tabs defaultValue="products" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="products"    className="gap-1.5"><Package className="w-4 h-4" /> Produits</TabsTrigger>
+          <TabsTrigger value="tickets"     className="gap-1.5"><ReceiptText className="w-4 h-4" /> Tickets</TabsTrigger>
           <TabsTrigger value="categories"  className="gap-1.5"><Tags className="w-4 h-4" /> Catégories</TabsTrigger>
           <TabsTrigger value="stock"       className="gap-1.5"><Boxes className="w-4 h-4" /> Stock</TabsTrigger>
           <TabsTrigger value="movements"   className="gap-1.5"><ArrowLeftRight className="w-4 h-4" /> Mouvements</TabsTrigger>
@@ -71,6 +75,7 @@ export default function ProduitsStock() {
         </TabsList>
 
         <TabsContent value="products"><ProductsTab /></TabsContent>
+        <TabsContent value="tickets"><TicketsTab /></TabsContent>
         <TabsContent value="categories"><CategoriesTab /></TabsContent>
         <TabsContent value="stock"><StockTab /></TabsContent>
         <TabsContent value="movements"><MovementsTab /></TabsContent>
@@ -743,6 +748,418 @@ function AlertsTab() {
         </Card>
       ))}
     </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TICKETS TAB — caisse (POS-style)
+═══════════════════════════════════════════════════════════════ */
+
+interface CartLine {
+  product_id:    string
+  product_nom:   string
+  product_sku:   string
+  quantite:      number
+  prix_unitaire: number
+  tva:           number
+  stock_actuel:  number
+}
+
+function TicketsTab() {
+  const { data: tickets = [], isLoading: loadingTickets } = useStockTickets()
+  const { data: stats }                                   = useStockTicketStats()
+  const cancel       = useCancelStockTicket()
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  return (
+    <div className="space-y-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Aujourd'hui"   value={formatCurrency(Number(stats?.today_revenue ?? 0))}   icon={<ReceiptText className="w-4 h-4 text-blue-500" />} />
+        <StatCard label="Cette semaine" value={formatCurrency(Number(stats?.week_revenue ?? 0))}    icon={<TrendingUp className="w-4 h-4 text-emerald-500" />} />
+        <StatCard label="Ce mois"       value={formatCurrency(Number(stats?.month_revenue ?? 0))}   icon={<TrendingUp className="w-4 h-4 text-violet-500" />} />
+        <StatCard label="Total tickets" value={Number(stats?.total_count ?? 0)}                      icon={<ShoppingCart className="w-4 h-4 text-amber-500" />} />
+      </div>
+
+      {/* New ticket form */}
+      <NewTicketForm />
+
+      {/* History */}
+      <Card className="overflow-hidden">
+        <div className="p-3 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <ReceiptText className="w-4 h-4" /> Historique des tickets
+          </h3>
+          <span className="text-xs text-muted-foreground">{tickets.length} ticket(s)</span>
+        </div>
+        {loadingTickets ? (
+          <LoadingBlock label="Chargement…" />
+        ) : tickets.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            Aucun ticket pour le moment. Créez le premier ci-dessus.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2">Numéro</th>
+                  <th className="text-left px-3 py-2">Date</th>
+                  <th className="text-left px-3 py-2">Client</th>
+                  <th className="text-right px-3 py-2">Lignes</th>
+                  <th className="text-right px-3 py-2">Total TTC</th>
+                  <th className="text-left px-3 py-2">Paiement</th>
+                  <th className="text-left px-3 py-2">Statut</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {tickets.map((t) => (
+                  <tr key={t.id} className={cn('hover:bg-muted/30', t.statut === 'annule' && 'opacity-60')}>
+                    <td className="px-3 py-2 font-mono text-xs">{t.numero}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap">{new Date(t.date).toLocaleString('fr-FR')}</td>
+                    <td className="px-3 py-2 text-xs">{t.client_full_nom ?? t.client_nom ?? '—'}</td>
+                    <td className="px-3 py-2 text-right">{t.lines_count ?? 0}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatCurrency(Number(t.total_ttc))}</td>
+                    <td className="px-3 py-2 text-xs">
+                      <Badge variant="outline" className="text-[10px] capitalize">{t.methode_paiement}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {t.statut === 'valide'
+                        ? <Badge className="bg-emerald-500 text-[10px]">Validé</Badge>
+                        : <Badge variant="destructive" className="text-[10px]">Annulé</Badge>}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button onClick={() => setOpenId(t.id)} className="p-1.5 rounded hover:bg-muted" title="Voir détails">
+                        <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                      {t.statut === 'valide' && (
+                        <button
+                          onClick={() => { if (confirm(`Annuler le ticket ${t.numero} ?`)) cancel.mutate(t.id) }}
+                          className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-950/40"
+                          title="Annuler"
+                        >
+                          <Ban className="w-3.5 h-3.5 text-red-500" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <TicketDetailDialog id={openId} onClose={() => setOpenId(null)} />
+    </div>
+  )
+}
+
+function NewTicketForm() {
+  const { data: products = [] } = useStockProducts('')
+  const create                  = useCreateStockTicket()
+  const [cart, setCart]         = useState<CartLine[]>([])
+  const [methode, setMethode]   = useState<TicketPaymentMethod>('especes')
+  const [clientNom, setClientNom] = useState('')
+  const [notes, setNotes]       = useState('')
+  const [search, setSearch]     = useState('')
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return products
+      .filter(p => p.is_active)
+      .filter(p => !q || p.nom.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+      .slice(0, 12)
+  }, [products, search])
+
+  const totals = useMemo(() => {
+    let ht = 0, tva = 0
+    for (const l of cart) {
+      const ttc = l.prix_unitaire * l.quantite
+      const lht = ttc / (1 + l.tva / 100)
+      ht += lht
+      tva += ttc - lht
+    }
+    return { ht, tva, ttc: ht + tva }
+  }, [cart])
+
+  const addProduct = (p: StockProduct) => {
+    setCart(prev => {
+      const idx = prev.findIndex(l => l.product_id === p.id)
+      if (idx >= 0) {
+        const copy = [...prev]
+        copy[idx] = { ...copy[idx], quantite: copy[idx].quantite + 1 }
+        return copy
+      }
+      return [...prev, {
+        product_id:    p.id,
+        product_nom:   p.nom,
+        product_sku:   p.sku,
+        quantite:      1,
+        prix_unitaire: Number(p.prix_vente),
+        tva:           Number(p.tva),
+        stock_actuel:  Number(p.stock_actuel),
+      }]
+    })
+  }
+
+  const updateLine = (id: string, patch: Partial<CartLine>) => {
+    setCart(prev => prev.map(l => l.product_id === id ? { ...l, ...patch } : l))
+  }
+
+  const removeLine = (id: string) => setCart(prev => prev.filter(l => l.product_id !== id))
+
+  const submit = async () => {
+    if (cart.length === 0) return
+    await create.mutateAsync({
+      methode_paiement: methode,
+      client_nom:       clientNom || null,
+      notes:            notes || null,
+      lines:            cart.map(l => ({
+        product_id:    l.product_id,
+        quantite:      l.quantite,
+        prix_unitaire: l.prix_unitaire,
+        tva:           l.tva,
+      })),
+    })
+    setCart([]); setClientNom(''); setNotes(''); setMethode('especes')
+  }
+
+  return (
+    <Card className="p-4 space-y-4 border-2 border-dashed border-blue-200 dark:border-blue-950/60 bg-blue-50/30 dark:bg-blue-950/10">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <ShoppingCart className="w-4 h-4 text-blue-500" /> Nouveau ticket de caisse
+        </h3>
+        <span className="text-[11px] text-muted-foreground italic">
+          Stock décrémenté automatiquement à la validation
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4">
+        {/* Product picker */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Rechercher un produit (nom ou SKU)…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="col-span-full text-xs text-muted-foreground italic text-center py-4">
+                Aucun produit trouvé
+              </div>
+            ) : filtered.map(p => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => addProduct(p)}
+                disabled={Number(p.stock_actuel) <= 0}
+                className={cn(
+                  'text-left p-2 rounded-md border border-border bg-background hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-colors',
+                  Number(p.stock_actuel) <= 0 && 'opacity-40 cursor-not-allowed',
+                )}
+              >
+                <div className="text-xs font-semibold truncate">{p.nom}</div>
+                <div className="text-[10px] text-muted-foreground font-mono truncate">{p.sku}</div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs font-bold text-blue-600">{formatCurrency(Number(p.prix_vente))}</span>
+                  <span className={cn(
+                    'text-[10px] px-1 rounded',
+                    Number(p.stock_actuel) <= 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700',
+                  )}>
+                    {p.stock_actuel}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cart */}
+        <div className="space-y-2">
+          <div className="rounded-md border border-border bg-background overflow-hidden">
+            <div className="px-3 py-2 bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Panier ({cart.length})
+            </div>
+            {cart.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground italic">
+                Cliquez un produit pour l'ajouter
+              </div>
+            ) : (
+              <div className="max-h-[260px] overflow-y-auto divide-y divide-border">
+                {cart.map(l => (
+                  <div key={l.product_id} className="p-2 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium truncate">{l.product_nom}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono">{l.product_sku}</div>
+                      </div>
+                      <button onClick={() => removeLine(l.product_id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 p-1 rounded">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateLine(l.product_id, { quantite: Math.max(0.01, l.quantite - 1) })}
+                        className="p-1 rounded hover:bg-muted"
+                      ><Minus className="w-3 h-3" /></button>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={l.quantite}
+                        onChange={(e) => updateLine(l.product_id, { quantite: Number(e.target.value) || 0.01 })}
+                        className="h-7 w-14 text-center text-xs"
+                      />
+                      <button
+                        onClick={() => updateLine(l.product_id, { quantite: l.quantite + 1 })}
+                        className="p-1 rounded hover:bg-muted"
+                      ><Plus className="w-3 h-3" /></button>
+                      <span className="text-[10px] text-muted-foreground mx-1">×</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={l.prix_unitaire}
+                        onChange={(e) => updateLine(l.product_id, { prix_unitaire: Number(e.target.value) || 0 })}
+                        className="h-7 flex-1 text-right text-xs"
+                      />
+                      <span className="text-xs font-bold w-20 text-right">
+                        {formatCurrency(l.prix_unitaire * l.quantite)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Totals + meta */}
+          <div className="rounded-md border border-border bg-background p-3 space-y-2">
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Total HT</span><span>{formatCurrency(totals.ht)}</span></div>
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">TVA</span><span>{formatCurrency(totals.tva)}</span></div>
+            <div className="flex justify-between text-base font-bold border-t border-border pt-2">
+              <span>Total TTC</span><span className="text-blue-600">{formatCurrency(totals.ttc)}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Select value={methode} onValueChange={(v) => setMethode(v as TicketPaymentMethod)}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="especes">Espèces</SelectItem>
+                  <SelectItem value="carte">Carte</SelectItem>
+                  <SelectItem value="virement">Virement</SelectItem>
+                  <SelectItem value="cheque">Chèque</SelectItem>
+                  <SelectItem value="autre">Autre</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Client (optionnel)"
+                value={clientNom}
+                onChange={(e) => setClientNom(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            <Input
+              placeholder="Notes (optionnel)"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="h-9"
+            />
+
+            <Button
+              onClick={submit}
+              disabled={cart.length === 0 || create.isPending}
+              className="w-full h-10 mt-1 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+            >
+              <ReceiptText className="w-4 h-4" />
+              {create.isPending ? 'Validation…' : `Valider — ${formatCurrency(totals.ttc)}`}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function TicketDetailDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
+  const { data: ticket, isLoading } = useStockTicket(id)
+
+  return (
+    <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
+      {id && (
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ReceiptText className="w-5 h-5" /> Ticket {ticket?.numero ?? '…'}
+            </DialogTitle>
+          </DialogHeader>
+          {isLoading || !ticket ? (
+            <LoadingBlock label="Chargement…" />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Date :</span>{' '}
+                  {new Date(ticket.date).toLocaleString('fr-FR')}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Client :</span>{' '}
+                  {ticket.client_nom ?? '—'}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Paiement :</span>{' '}
+                  <span className="capitalize">{ticket.methode_paiement}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Statut :</span>{' '}
+                  {ticket.statut === 'valide'
+                    ? <Badge className="bg-emerald-500 text-[10px]">Validé</Badge>
+                    : <Badge variant="destructive" className="text-[10px]">Annulé</Badge>}
+                </div>
+              </div>
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40 text-[10px] uppercase">
+                    <tr>
+                      <th className="text-left px-2 py-1">Produit</th>
+                      <th className="text-right px-2 py-1">Qté</th>
+                      <th className="text-right px-2 py-1">PU</th>
+                      <th className="text-right px-2 py-1">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {ticket.lines.map((l) => (
+                      <tr key={l.id}>
+                        <td className="px-2 py-1">
+                          <div className="font-medium">{l.product_nom}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{l.product_sku}</div>
+                        </td>
+                        <td className="px-2 py-1 text-right">{l.quantite}</td>
+                        <td className="px-2 py-1 text-right">{formatCurrency(Number(l.prix_unitaire))}</td>
+                        <td className="px-2 py-1 text-right font-semibold">{formatCurrency(Number(l.total_ttc))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-center bg-muted/40 rounded-md p-2 text-sm">
+                <span className="font-bold">Total TTC</span>
+                <span className="font-bold text-blue-600">{formatCurrency(Number(ticket.total_ttc))}</span>
+              </div>
+              {ticket.notes && (
+                <div className="text-xs text-muted-foreground italic">{ticket.notes}</div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      )}
+    </Dialog>
   )
 }
 

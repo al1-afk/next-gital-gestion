@@ -230,3 +230,118 @@ export function useLinkProductToInvoiceLine() {
     /* Silent — used internally after facture creation */
   })
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   TICKETS  (point of sale)
+═══════════════════════════════════════════════════════════════ */
+
+export type TicketPaymentMethod = 'especes' | 'carte' | 'virement' | 'cheque' | 'autre'
+export type TicketStatut        = 'valide' | 'annule'
+
+export interface StockTicket {
+  id:                string
+  numero:            string
+  client_id:         string | null
+  client_nom:        string | null
+  date:              string
+  total_ht:          number
+  total_tva:         number
+  total_ttc:         number
+  methode_paiement:  TicketPaymentMethod
+  statut:            TicketStatut
+  notes:             string | null
+  created_at:        string
+  updated_at:        string
+  /* joined */
+  lines_count?:       number
+  client_full_nom?:   string | null
+}
+
+export interface StockTicketLine {
+  id:            string
+  ticket_id:     string
+  product_id:    string
+  product_nom:   string
+  product_sku:   string
+  quantite:      number
+  prix_unitaire: number
+  tva:           number
+  total_ht:      number
+  total_ttc:     number
+  created_at:    string
+}
+
+export interface StockTicketStats {
+  today_count:    number
+  today_revenue:  number
+  week_count:     number
+  week_revenue:   number
+  month_count:    number
+  month_revenue:  number
+  total_count:    number
+  total_revenue:  number
+}
+
+export interface CreateTicketInput {
+  client_id?:         string | null
+  client_nom?:        string | null
+  methode_paiement?:  TicketPaymentMethod
+  notes?:             string | null
+  numero?:            string
+  lines: Array<{
+    product_id:    string
+    quantite:      number
+    prix_unitaire: number
+    tva?:          number
+  }>
+}
+
+export function useStockTickets() {
+  return useQuery<StockTicket[]>({
+    queryKey: tk('tickets'),
+    queryFn:  () => api.get('/api/stock/tickets'),
+    staleTime: 1000 * 60,
+  })
+}
+
+export function useStockTicket(id: string | null) {
+  return useQuery<StockTicket & { lines: StockTicketLine[] }>({
+    queryKey: tk('ticket', id),
+    queryFn:  () => api.get(`/api/stock/tickets/${id}`),
+    enabled:  !!id,
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useStockTicketStats() {
+  return useQuery<StockTicketStats>({
+    queryKey: tk('tickets-stats'),
+    queryFn:  () => api.get('/api/stock/tickets/stats'),
+    staleTime: 1000 * 30,
+  })
+}
+
+export function useCreateStockTicket() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateTicketInput) =>
+      api.post<StockTicket>('/api/stock/tickets', data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock'] })
+      toast.success('Ticket enregistré — stock mis à jour')
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+}
+
+export function useCancelStockTicket() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.patch(`/api/stock/tickets/${id}/cancel`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['stock'] })
+      toast.success('Ticket annulé — stock restauré')
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur'),
+  })
+}

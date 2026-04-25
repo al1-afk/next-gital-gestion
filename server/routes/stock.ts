@@ -356,6 +356,188 @@ router.get('/alerts', async (req: Request, res: Response) => {
    INVOICE LINKS  (optional, keeps facture_lines untouched)
 ═══════════════════════════════════════════════════════════════ */
 
+/* ═══════════════════════════════════════════════════════════════
+   TICKETS  (point-of-sale) — auto-decrement stock via trigger
+═══════════════════════════════════════════════════════════════ */
+
+function generateTicketNumber(): string {
+  const d    = new Date()
+  const ymd  = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase()
+  return `TKT-${ymd}-${rand}`
+}
+
+interface TicketLineInput {
+  product_id:    string
+  quantite:      number
+  prix_unitaire: number
+  tva?:          number
+}
+
+router.get('/tickets', async (req: Request, res: Response) => {
+  const limit  = Math.min(Number(req.query.limit)  || 100, 500)
+  const offset = Math.max(Number(req.query.offset) || 0, 0)
+  try {
+    const rows = await tenantQuery(req.user!.tenantId,
+      `SELECT t.*,
+              c.nom AS client_full_nom,
+              (SELECT COUNT(*) FROM stock_ticket_lines l WHERE l.ticket_id = t.id) AS lines_count
+       FROM stock_tickets t
+       LEFT JOIN clients c ON c.id = t.client_id
+       ORDER BY t.date DESC
+       LIMIT $1 OFFSET $2`,
+      [limit, offset],
+    )
+    res.json(rows)
+  } catch (err: any) {
+    console.error('[stock/tickets GET]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.get('/tickets/stats', async (req: Request, res: Response) => {
+  try {
+    const stats = await tenantQueryOne(req.user!.tenantId,
+      `SELECT
+         COUNT(*) FILTER (WHERE date::date = CURRENT_DATE)          AS today_count,
+         COALESCE(SUM(total_ttc) FILTER (WHERE date::date = CURRENT_DATE AND statut = 'valide'), 0) AS today_revenue,
+         COUNT(*) FILTER (WHERE date >= date_trunc('week', CURRENT_DATE))  AS week_count,
+         COALESCE(SUM(total_ttc) FILTER (WHERE date >= date_trunc('week', CURRENT_DATE) AND statut = 'valide'), 0) AS week_revenue,
+         COUNT(*) FILTER (WHERE date >= date_trunc('month', CURRENT_DATE)) AS month_count,
+         COALESCE(SUM(total_ttc) FILTER (WHERE date >= date_trunc('month', CURRENT_DATE) AND statut = 'valide'), 0) AS month_revenue,
+         COUNT(*)                                                    AS total_count,
+         COALESCE(SUM(total_ttc) FILTER (WHERE statut = 'valide'), 0) AS total_revenue
+       FROM stock_tickets`,
+    )
+    res.json(stats ?? {})
+  } catch (err: any) {
+    console.error('[stock/tickets/stats]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.get('/tickets/:id', async (req: Request, res: Response) => {
+  try {
+    const ticket = await tenantQueryOne(req.user!.tenantId,
+      `SELECT * FROM stock_tickets WHERE id = $1`, [req.params.id])
+    if (!ticket) return res.status(404).json({ error: 'Non trouvé' })
+    const lines = await tenantQuery(req.user!.tenantId,
+      `SELECT * FROM stock_ticket_lines WHERE ticket_id = $1 ORDER BY created_at ASC`,
+      [req.params.id])
+    res.json({ ...ticket, lines })
+  } catch (err: any) {
+    console.error('[stock/tickets/:id]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.post('/tickets', async (req: Request, res: Response) => {
+  const { client_id, client_nom, methode_paiement, notes, lines, numero } = req.body || {}
+
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return res.status(400).json({ error: 'Au moins une ligne est requise' })
+  }
+  for (const l of lines) {
+    if (!l?.product_id || !(Number(l.quantite) > 0) || !(Number(l.prix_unitaire) >= 0)) {
+      return res.status(400).json({ error: 'Ligne invalide (produit, quantité, prix)' })
+    }
+  }
+
+  const tenantId = req.user!.tenantId
+
+  try {
+    /* Look up product info inline so we can store nom/sku snapshots */
+    const productIds = (lines as TicketLineInput[]).map(l => l.product_id)
+    const products = await tenantQuery<{ id: string; nom: string; sku: string; tva: number; stock_actuel: number }>(
+      tenantId,
+      `SELECT id, nom, sku, tva, stock_actuel FROM stock_products WHERE id = ANY($1::uuid[])`,
+      [productIds],
+    )
+    const byId = new Map(products.map(p => [p.id, p]))
+
+    /* Validate every product exists in this tenant */
+    for (const l of lines as TicketLineInput[]) {
+      if (!byId.has(l.product_id)) {
+        return res.status(400).json({ error: `Produit introuvable: ${l.product_id}` })
+      }
+    }
+
+    /* Compute totals — TTC = sum of (qty * prix_unitaire), HT/TVA derived per-line tva */
+    let totalHt  = 0
+    let totalTva = 0
+    const enriched = (lines as TicketLineInput[]).map(l => {
+      const p   = byId.get(l.product_id)!
+      const tva = Number(l.tva ?? p.tva ?? 20)
+      const qty = Number(l.quantite)
+      const pu  = Number(l.prix_unitaire)
+      const ht  = pu * qty / (1 + tva / 100)
+      const ttc = pu * qty
+      totalHt  += ht
+      totalTva += ttc - ht
+      return { ...l, tva, total_ht: ht, total_ttc: ttc, product_nom: p.nom, product_sku: p.sku }
+    })
+    const totalTtc = totalHt + totalTva
+
+    const ticketNumero = String(numero || '').trim() || generateTicketNumber()
+
+    const ticket = await tenantQueryOne<{ id: string }>(
+      tenantId,
+      `INSERT INTO stock_tickets
+         (tenant_id, numero, client_id, client_nom, methode_paiement, statut, notes,
+          total_ht, total_tva, total_ttc)
+       VALUES ($1, $2, $3, $4, $5, 'valide', $6, $7, $8, $9)
+       RETURNING *`,
+      [
+        tenantId,
+        ticketNumero,
+        client_id || null,
+        client_nom || null,
+        methode_paiement || 'especes',
+        notes || null,
+        totalHt.toFixed(2),
+        totalTva.toFixed(2),
+        totalTtc.toFixed(2),
+      ],
+    )
+    if (!ticket) return res.status(500).json({ error: 'Création ticket échouée' })
+
+    /* Insert lines — trigger creates `sortie` movements automatically */
+    for (const l of enriched) {
+      await tenantQuery(
+        tenantId,
+        `INSERT INTO stock_ticket_lines
+           (tenant_id, ticket_id, product_id, product_nom, product_sku,
+            quantite, prix_unitaire, tva, total_ht, total_ttc)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          tenantId, ticket.id, l.product_id, l.product_nom, l.product_sku,
+          l.quantite, l.prix_unitaire, l.tva,
+          l.total_ht.toFixed(2), l.total_ttc.toFixed(2),
+        ],
+      )
+    }
+
+    res.status(201).json(ticket)
+  } catch (err: any) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Numéro déjà utilisé' })
+    console.error('[stock/tickets POST]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+router.patch('/tickets/:id/cancel', async (req: Request, res: Response) => {
+  try {
+    const row = await tenantQueryOne(req.user!.tenantId,
+      `UPDATE stock_tickets SET statut = 'annule' WHERE id = $1 AND statut = 'valide' RETURNING *`,
+      [req.params.id])
+    if (!row) return res.status(404).json({ error: 'Ticket introuvable ou déjà annulé' })
+    res.json(row)
+  } catch (err: any) {
+    console.error('[stock/tickets cancel]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
 router.post('/invoice-links', async (req: Request, res: Response) => {
   const { facture_line_id, product_id, quantite } = req.body || {}
   if (!facture_line_id || !product_id) {
