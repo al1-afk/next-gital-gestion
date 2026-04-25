@@ -11,7 +11,10 @@
     "server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:tenant": "tsx --test tests/tenant-isolation.test.ts",
+    "test:visual": "playwright test --config=playwright.config.ts",
+    "test:visual:update": "playwright test --config=playwright.config.ts --update-snapshots"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

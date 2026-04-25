@@ -58,10 +58,20 @@ async function request<T>(
         await refreshAccessToken()
         return request<T>(method, path, body, auth, false)
       } catch {
-        tokenStore.clear()
+        /* Refresh failed — purge every client-side cache so the
+           next user on this browser cannot see stale data. */
+        const { purgeClientSession } = await import('./session')
+        await purgeClientSession()
         window.location.href = '/auth'
         throw new Error('Session expirée')
       }
+    }
+    /* TOKEN_REUSE (session hijack detected) or other hard 401 —
+       same cleanup, the user is being force-logged-out. */
+    if (data.code === 'TOKEN_REUSE' || data.code === 'NO_REFRESH' || data.code === 'INVALID_REFRESH') {
+      const { purgeClientSession } = await import('./session')
+      await purgeClientSession()
+      window.location.href = '/auth'
     }
     throw new Error(data.error ?? 'Non authentifié')
   }
@@ -102,6 +112,9 @@ export const authApi = {
 
   resetPassword: (email: string, code: string, newPassword: string) =>
     api.publicPost<{ success: boolean }>('/api/auth/reset-password', { email, code, newPassword }),
+
+  /* Best-effort server-side logout: revokes refresh token + clears cookie */
+  logout: () => api.post<{ success: boolean }>('/api/auth/logout', {}).catch(() => ({ success: false })),
 }
 
 /* ── Tenant API ──────────────────────────────────────────────── */

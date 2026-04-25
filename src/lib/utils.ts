@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { useEffect, useState } from 'react'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -11,6 +12,44 @@ export function formatCurrency(amount: number, currency = 'MAD'): string {
     currency,
     minimumFractionDigits: 2,
   }).format(amount)
+}
+
+/**
+ * Compact currency format for small viewports ("64,2K MAD" instead of "64 180,00 MAD").
+ * Intended for mobile KPI cards and tight layouts.
+ */
+export function formatCurrencyCompact(amount: number, currency = 'MAD'): string {
+  if (amount === 0) return `0 ${currency}`
+  const abs = Math.abs(amount)
+  // Below 1k → show full amount without decimals
+  if (abs < 1000) {
+    return `${new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 }).format(amount)} ${currency}`
+  }
+  const formatted = new Intl.NumberFormat('fr-MA', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(amount)
+  return `${formatted} ${currency}`
+}
+
+/**
+ * React hook returning `true` when the viewport matches `(max-width: 639px)`.
+ * Mirrors Tailwind's `sm:` breakpoint threshold.
+ */
+export function useIsMobileViewport(): boolean {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(max-width: 639px)').matches
+  })
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 639px)')
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
+
+  return isMobile
 }
 
 export function formatDate(date: string | Date | null): string {

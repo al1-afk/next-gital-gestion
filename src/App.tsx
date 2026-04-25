@@ -29,6 +29,7 @@ const Fournisseurs   = lazy(() => import('@/pages/Fournisseurs'))
 const Domaines       = lazy(() => import('@/pages/Domaines'))
 const Hebergements   = lazy(() => import('@/pages/Hebergements'))
 const Produits       = lazy(() => import('@/pages/Produits'))
+const ProduitsStock  = lazy(() => import('@/pages/ProduitsStock'))
 const BonsCommande   = lazy(() => import('@/pages/BonsCommande'))
 const Statistiques   = lazy(() => import('@/pages/Statistiques'))
 const ActivityLogs   = lazy(() => import('@/pages/ActivityLogs'))
@@ -41,15 +42,9 @@ const AbonnementsClients  = lazy(() => import('@/pages/AbonnementsClients'))
 const Integrations        = lazy(() => import('@/pages/Integrations'))
 const Rapports            = lazy(() => import('@/pages/Rapports'))
 const Landing             = lazy(() => import('@/pages/Landing'))
+const ComingSoon          = lazy(() => import('@/pages/ComingSoon'))
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    },
-  },
-})
+import { queryClient } from '@/lib/queryClient'
 
 function PageLoader() {
   return (
@@ -92,6 +87,7 @@ export default function App() {
               <Route path="contrats"                   element={<Contrats />} />
               <Route path="bons-commande"              element={<BonsCommande />} />
               <Route path="produits"                   element={<Produits />} />
+              <Route path="produits-stock"             element={<ProduitsStock />} />
               <Route path="paiements"                  element={<Paiements />} />
               <Route path="cheques-recus"              element={<ChequesRecus />} />
               <Route path="cheques-emis"               element={<ChequesEmis />} />
@@ -110,6 +106,7 @@ export default function App() {
               <Route path="parametres"                 element={<Parametres />} />
               <Route path="automatisations"            element={<Automatisations />} />
               <Route path="rapports"                   element={<Rapports />} />
+              <Route path="bientot"                    element={<ComingSoon />} />
               <Route path="*"                          element={<Navigate to="" replace />} />
             </Route>
 

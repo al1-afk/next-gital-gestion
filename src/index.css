@@ -414,6 +414,15 @@
     border-color: rgba(167,139,250,0.3); color: #C4B5FD;
   }
 
+  /* ══ TABLE SCROLL CONTAINER (mobile-friendly) ══
+     Wraps wide tables so they scroll horizontally on mobile without
+     squeezing columns below readable width. */
+  .table-scroll {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll > table { min-width: 640px; }
+
   /* ══ TABLES ══ */
   .table-header th {
     background-color: var(--surface-table-hd);
@@ -440,7 +449,7 @@
   /* ══ FORM ══ */
   .form-label { font-size:13px; font-weight:500; color:hsl(var(--foreground)/0.78); display:block; margin-bottom:5px; }
   .input-field {
-    @apply w-full rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground
+    @apply w-full rounded-xl border border-border bg-white px-3 py-2 text-base sm:text-sm text-foreground
            placeholder:text-muted-foreground
            focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500
            transition-colors;
