@@ -12,6 +12,7 @@ import {
   type Facture, type FactureStatut,
 } from '@/hooks/useFactures'
 import { useClients }     from '@/hooks/useClients'
+import { useStockProducts, useCreateStockMovement } from '@/hooks/useStock'
 import { Button }         from '@/components/ui/button'
 import { Input }          from '@/components/ui/input'
 import { Badge }          from '@/components/ui/badge'
@@ -370,6 +371,14 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
   const create = useCreateFacture()
   const update = useUpdateFacture()
   const { data: clients = [] } = useClients()
+  const { data: stockProducts = [] } = useStockProducts('')
+  const createMovement = useCreateStockMovement()
+
+  /* Optional stock-product link — off by default, only for new factures */
+  const [stockLink, setStockLink] = useState<{ product_id: string; quantite: number }>({
+    product_id: '',
+    quantite:   1,
+  })
 
   const [form, setForm] = useState<{
     numero:        string
@@ -412,6 +421,19 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
     setForm(p => ({ ...p, montant_paye: paye, statut: newStatut }))
   }
 
+  /* When a stock product is selected, prefill HT (= prix_vente × qty) + TVA */
+  const applyStockProduct = (productId: string, qty: number) => {
+    setStockLink({ product_id: productId, quantite: qty })
+    if (!productId) return
+    const p = stockProducts.find(sp => sp.id === productId)
+    if (!p) return
+    const ht  = Number(p.prix_vente) * Math.max(0, qty)
+    const tva = Number(p.tva)
+    const ttc = ht * (1 + tva / 100)
+    const newStatut = computeAutoStatut(form.montant_paye, ttc, form.statut)
+    setForm(prev => ({ ...prev, montant_ht: ht, tva, montant_ttc: ttc, statut: newStatut }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const payload = {
@@ -420,8 +442,30 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
       notes:         form.notes         || null,
       client_id:     form.client_id     || null,
     }
-    if (facture) await update.mutateAsync({ id: facture.id, ...payload })
-    else         await create.mutateAsync(payload as any)
+    let created: Facture | null = null
+    if (facture) {
+      await update.mutateAsync({ id: facture.id, ...payload })
+    } else {
+      created = (await create.mutateAsync(payload as any)) as unknown as Facture
+    }
+
+    /* Optional stock decrement — only on NEW factures with a linked product */
+    if (!facture && created?.id && stockLink.product_id && stockLink.quantite > 0) {
+      try {
+        await createMovement.mutateAsync({
+          product_id: stockLink.product_id,
+          type:       'sortie',
+          quantite:   stockLink.quantite,
+          reference:  form.numero,
+          note:       `Décrément auto — facture ${form.numero}`,
+          source:     'facture',
+          source_id:  created.id,
+        })
+      } catch {
+        /* Silent — the facture itself is already saved. Toast shown by hook. */
+      }
+    }
+
     onClose()
   }
 
@@ -504,6 +548,44 @@ function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => v
           </Select>
         </div>
       </div>
+
+      {/* ── Optional stock product link — new factures only ── */}
+      {!facture && stockProducts.length > 0 && (
+        <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="form-label m-0">Produit du stock (optionnel)</label>
+            <span className="text-[11px] text-muted-foreground italic">
+              Auto-remplit le prix + décrémente le stock à la validation
+            </span>
+          </div>
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <Select
+              value={stockLink.product_id || 'none'}
+              onValueChange={v => applyStockProduct(v === 'none' ? '' : v, stockLink.quantite)}
+            >
+              <SelectTrigger><SelectValue placeholder="— Aucun produit —" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— Aucun produit —</SelectItem>
+                {stockProducts.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.nom} — {p.sku} (stock : {p.stock_actuel})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={stockLink.quantite}
+              onChange={e => applyStockProduct(stockLink.product_id, +e.target.value)}
+              className="w-24"
+              placeholder="Qté"
+              disabled={!stockLink.product_id}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <label className="form-label">Notes</label>

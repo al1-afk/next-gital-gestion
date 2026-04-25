@@ -283,3 +283,20 @@ export const abonnementsClientsSchema: EntitySchema<any> = {
     { key: 'facture_auto',               label: 'Facturation auto',    kind: 'boolean' },
   ],
 }
+
+/* ─── Stock — Produits ──────────────────────────────────────────── */
+export const stockProductsSchema: EntitySchema<any> = {
+  entity:   'produit',
+  filename: 'stock_produits',
+  fields: [
+    { key: 'nom',           label: 'Nom',           required: true },
+    { key: 'sku',           label: 'SKU' },
+    { key: 'description',   label: 'Description' },
+    { key: 'prix_achat',    label: 'Prix achat',    kind: 'number' },
+    { key: 'prix_vente',    label: 'Prix vente',    kind: 'number' },
+    { key: 'tva',           label: 'TVA %',         kind: 'number' },
+    { key: 'stock_actuel',  label: 'Stock actuel',  kind: 'number' },
+    { key: 'stock_minimum', label: 'Stock minimum', kind: 'number' },
+    { key: 'image_url',     label: 'Image URL' },
+  ],
+}

@@ -6,9 +6,10 @@ import {
   CreditCard, DollarSign, TrendingUp, Globe, Server, Package, ShoppingCart,
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
-  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown,
+  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useStockAlerts } from '@/hooks/useStock'
 
 interface NavItem {
   label: string
@@ -36,6 +37,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Contrats',            href: '/contrats',     icon: FileSignature },
       { label: 'Bons de commande',    href: '/bons-commande',icon: ShoppingCart },
       { label: 'Produits & Services', href: '/produits',     icon: Package },
+      { label: 'Produits & Stock',    href: '/produits-stock', icon: Boxes, badge: 'Stock' },
     ],
   },
   {
@@ -68,6 +70,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Automatisations',    href: '/automatisations',  icon: Zap,     badge: 'Auto' },
       { label: 'Intégrations',       href: '/integrations',     icon: PlugZap },
       { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown },
+      { label: 'Bientôt',            href: '/bientot',          icon: Rocket,  badge: 'Soon' },
     ],
   },
 ]
@@ -90,6 +93,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>()
   const base           = tenantSlug ? `/${tenantSlug}` : ''
   const [expandedGroups, setExpandedGroups] = useState<string[]>(getInitialExpanded)
+  const { data: stockAlerts = [] } = useStockAlerts()
+  const stockAlertCount = stockAlerts.length
 
   const toggleGroup = (title: string) => {
     setExpandedGroups(prev => {
@@ -245,6 +250,26 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                                   : 'bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800/50'
                               )}>
                                 Auto
+                              </span>
+                            )}
+                            {item.badge === 'Soon' && (
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-pink-50 text-pink-600 border border-pink-200 dark:bg-pink-950/50 dark:text-pink-300 dark:border-pink-800/50'
+                              )}>
+                                Soon
+                              </span>
+                            )}
+                            {item.badge === 'Stock' && stockAlertCount > 0 && (
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800/50'
+                              )}>
+                                {stockAlertCount}
                               </span>
                             )}
                           </>
