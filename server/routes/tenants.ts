@@ -19,16 +19,21 @@ router.get('/resolve/:slug', async (req, res) => {
 /* ── GET /api/tenants/members — liste membres du tenant ──────── */
 router.get('/members', requireAuth, async (req, res) => {
   const { tenantId } = req.user!
-  const members = await query(
-    `SELECT tu.id, tu.role, tu.status, tu.invited_at, tu.accepted_at,
-            u.email, u.name
-     FROM tenant_users tu
-     LEFT JOIN users u ON u.id = tu.user_id
-     WHERE tu.tenant_id = $1
-     ORDER BY tu.invited_at DESC`,
-    [tenantId]
-  )
-  res.json(members)
+  try {
+    const members = await query(
+      `SELECT tu.user_id, tu.role, tu.status, tu.invited_at,
+              u.email, u.name
+       FROM tenant_users tu
+       LEFT JOIN users u ON u.id = tu.user_id
+       WHERE tu.tenant_id = $1
+       ORDER BY tu.invited_at DESC`,
+      [tenantId]
+    )
+    res.json(members)
+  } catch (err: any) {
+    console.error('[tenants/members]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
 })
 
 /* ── PATCH /api/tenants — mettre à jour le tenant (admin) ───── */
@@ -69,13 +74,13 @@ router.post('/invite', requireAuth, async (req, res) => {
   res.status(201).json(member)
 })
 
-/* ── DELETE /api/tenants/members/:memberId ───────────────────── */
-router.delete('/members/:memberId', requireAuth, async (req, res) => {
+/* ── DELETE /api/tenants/members/:userId ─────────────────────── */
+router.delete('/members/:userId', requireAuth, async (req, res) => {
   if (req.user!.role !== 'admin') return res.status(403).json({ error: 'Admin requis' })
   await query(
     `UPDATE tenant_users SET status = 'revoked'
-     WHERE id = $1 AND tenant_id = $2`,
-    [req.params.memberId, req.user!.tenantId]
+     WHERE user_id = $1 AND tenant_id = $2`,
+    [req.params.userId, req.user!.tenantId]
   )
   res.json({ success: true })
 })

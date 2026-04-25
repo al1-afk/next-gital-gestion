@@ -25,13 +25,23 @@ const LOCAL_STORAGE_TENANT_PREFIXES = [
   'automation_',       // automation rules storage
 ]
 
+/* Exact keys that are tenant-scoped but don't match the prefixes above.
+   Must stay in sync with any new per-workspace localStorage write. */
+const LOCAL_STORAGE_TENANT_KEYS = [
+  'workspace_members', // team invitations (Equipe page)
+  'ng_signature',      // saved devis/facture signature
+]
+
 function clearLocalStorageScoped() {
   try {
     const toRemove: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
       if (!k) continue
-      if (LOCAL_STORAGE_TENANT_PREFIXES.some(p => k.startsWith(p))) toRemove.push(k)
+      if (
+        LOCAL_STORAGE_TENANT_PREFIXES.some(p => k.startsWith(p)) ||
+        LOCAL_STORAGE_TENANT_KEYS.includes(k)
+      ) toRemove.push(k)
     }
     toRemove.forEach(k => localStorage.removeItem(k))
   } catch { /* localStorage may be disabled */ }
