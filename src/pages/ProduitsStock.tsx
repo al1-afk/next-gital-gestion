@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Plus, Search, Trash2, Pencil, Package, Tags, Boxes, ArrowLeftRight,
   Truck, AlertTriangle, X, TrendingUp, TrendingDown, RefreshCw,
-  ReceiptText, ShoppingCart, Eye, Ban, Minus,
+  ReceiptText, ShoppingCart, Eye, Ban, Minus, Printer, ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -949,7 +949,7 @@ function NewTicketForm() {
               className="pl-9"
             />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[300px] overflow-y-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[420px] overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="col-span-full text-xs text-muted-foreground italic text-center py-4">
                 Aucun produit trouvé
@@ -961,20 +961,25 @@ function NewTicketForm() {
                 onClick={() => addProduct(p)}
                 disabled={Number(p.stock_actuel) <= 0}
                 className={cn(
-                  'text-left p-2 rounded-md border border-border bg-background hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-950/30 transition-colors',
+                  'text-left rounded-md border border-border bg-background overflow-hidden hover:border-blue-400 hover:shadow-md hover:bg-blue-50/30 dark:hover:bg-blue-950/30 transition-all',
                   Number(p.stock_actuel) <= 0 && 'opacity-40 cursor-not-allowed',
                 )}
               >
-                <div className="text-xs font-semibold truncate">{p.nom}</div>
-                <div className="text-[10px] text-muted-foreground font-mono truncate">{p.sku}</div>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs font-bold text-blue-600">{formatCurrency(Number(p.prix_vente))}</span>
-                  <span className={cn(
-                    'text-[10px] px-1 rounded',
-                    Number(p.stock_actuel) <= 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700',
-                  )}>
-                    {p.stock_actuel}
-                  </span>
+                <ProductThumb url={p.image_url} alt={p.nom} />
+                <div className="p-2">
+                  <div className="text-xs font-semibold line-clamp-1">{p.nom}</div>
+                  <div className="text-[10px] text-muted-foreground font-mono truncate">{p.sku}</div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs font-bold text-blue-600">{formatCurrency(Number(p.prix_vente))}</span>
+                    <span className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded font-semibold',
+                      Number(p.stock_actuel) <= 0 ? 'bg-red-100 text-red-700' :
+                      Number(p.stock_actuel) <= Number(p.stock_minimum) ? 'bg-amber-100 text-amber-700' :
+                      'bg-emerald-100 text-emerald-700',
+                    )}>
+                      {p.stock_actuel}
+                    </span>
+                  </div>
                 </div>
               </button>
             ))}
@@ -1090,6 +1095,11 @@ function NewTicketForm() {
 function TicketDetailDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data: ticket, isLoading } = useStockTicket(id)
 
+  const handlePrint = () => {
+    if (!ticket) return
+    printTicket(ticket)
+  }
+
   return (
     <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
       {id && (
@@ -1155,12 +1165,178 @@ function TicketDetailDialog({ id, onClose }: { id: string | null; onClose: () =>
               {ticket.notes && (
                 <div className="text-xs text-muted-foreground italic">{ticket.notes}</div>
               )}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="secondary" size="sm" onClick={onClose}>Fermer</Button>
+                <Button size="sm" onClick={handlePrint}>
+                  <Printer className="w-4 h-4" /> Imprimer
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
       )}
     </Dialog>
   )
+}
+
+/* ─── Product thumbnail with placeholder fallback ──────────────── */
+function ProductThumb({ url, alt }: { url: string | null | undefined; alt: string }) {
+  const [errored, setErrored] = useState(false)
+  if (!url || errored) {
+    return (
+      <div className="w-full aspect-[4/3] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
+        <ImageIcon className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+      </div>
+    )
+  }
+  return (
+    <div className="w-full aspect-[4/3] bg-slate-50 dark:bg-slate-900 overflow-hidden">
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        onError={() => setErrored(true)}
+        className="w-full h-full object-cover"
+      />
+    </div>
+  )
+}
+
+/* ─── Print receipt — opens a small, printer-friendly window ──── */
+function printTicket(ticket: {
+  numero:           string
+  date:             string
+  client_nom:       string | null
+  methode_paiement: string
+  statut:           string
+  notes:            string | null
+  total_ht:         number
+  total_tva:        number
+  total_ttc:        number
+  lines:            Array<{
+    product_nom:   string
+    product_sku:   string
+    quantite:      number
+    prix_unitaire: number
+    total_ttc:     number
+  }>
+}) {
+  const fmt = (v: number) =>
+    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + ' MAD'
+  const tenantSlug = sessionStorage.getItem('gestiq_tenant_slug') ?? 'GestiQ'
+  const tenantName = (localStorage.getItem('gestiq_company') || tenantSlug).replace(/[<>]/g, '')
+
+  const linesHtml = ticket.lines.map(l => `
+    <tr>
+      <td>
+        <div class="nom">${escapeHtml(l.product_nom)}</div>
+        <div class="sku">${escapeHtml(l.product_sku)}</div>
+      </td>
+      <td class="num">${Number(l.quantite)}</td>
+      <td class="num">${fmt(Number(l.prix_unitaire))}</td>
+      <td class="num">${fmt(Number(l.total_ttc))}</td>
+    </tr>
+  `).join('')
+
+  const html = `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ticket ${escapeHtml(ticket.numero)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 12px; color: #111; max-width: 320px; margin: 0 auto; padding: 16px;
+  }
+  .head { text-align: center; border-bottom: 2px dashed #999; padding-bottom: 10px; margin-bottom: 10px; }
+  .head h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: 0.5px; }
+  .head .sub { font-size: 11px; color: #666; }
+  .meta { display: flex; flex-direction: column; gap: 2px; font-size: 11px; margin-bottom: 10px; }
+  .meta .row { display: flex; justify-content: space-between; }
+  .meta .row span:first-child { color: #666; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  thead th {
+    text-align: left; font-size: 10px; text-transform: uppercase; color: #666;
+    border-bottom: 1px solid #999; padding: 4px 2px;
+  }
+  thead th.num { text-align: right; }
+  tbody td { padding: 5px 2px; border-bottom: 1px dashed #ddd; vertical-align: top; }
+  tbody td.num { text-align: right; }
+  .nom { font-weight: 600; }
+  .sku { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; color: #888; }
+  .totals { margin-top: 8px; }
+  .totals .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .totals .grand { border-top: 2px solid #111; margin-top: 4px; padding-top: 6px; font-weight: 700; font-size: 14px; }
+  .footer { text-align: center; margin-top: 14px; padding-top: 10px; border-top: 2px dashed #999; font-size: 11px; color: #666; }
+  .stamp { display: inline-block; padding: 2px 8px; border: 2px solid #c00; color: #c00;
+           font-weight: 700; transform: rotate(-8deg); margin-top: 8px; }
+  .notes { font-style: italic; color: #555; margin-top: 6px; font-size: 10px; }
+  @media print { body { padding: 4px; } @page { margin: 8mm; size: 80mm auto; } }
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>${escapeHtml(tenantName.toUpperCase())}</h1>
+    <div class="sub">Ticket de caisse</div>
+  </div>
+
+  <div class="meta">
+    <div class="row"><span>N°</span><strong>${escapeHtml(ticket.numero)}</strong></div>
+    <div class="row"><span>Date</span><span>${new Date(ticket.date).toLocaleString('fr-FR')}</span></div>
+    ${ticket.client_nom ? `<div class="row"><span>Client</span><span>${escapeHtml(ticket.client_nom)}</span></div>` : ''}
+    <div class="row"><span>Paiement</span><span style="text-transform:capitalize">${escapeHtml(ticket.methode_paiement)}</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Produit</th>
+        <th class="num">Qté</th>
+        <th class="num">PU</th>
+        <th class="num">Total</th>
+      </tr>
+    </thead>
+    <tbody>${linesHtml}</tbody>
+  </table>
+
+  <div class="totals">
+    <div class="row"><span>Total HT</span><span>${fmt(Number(ticket.total_ht))}</span></div>
+    <div class="row"><span>TVA</span><span>${fmt(Number(ticket.total_tva))}</span></div>
+    <div class="row grand"><span>Total TTC</span><span>${fmt(Number(ticket.total_ttc))}</span></div>
+  </div>
+
+  ${ticket.notes ? `<div class="notes">${escapeHtml(ticket.notes)}</div>` : ''}
+  ${ticket.statut === 'annule' ? `<div style="text-align:center"><span class="stamp">ANNULÉ</span></div>` : ''}
+
+  <div class="footer">
+    Merci de votre visite !<br>
+    <span style="font-size:9px">Édité par GestiQ</span>
+  </div>
+
+  <script>
+    window.onload = function() {
+      window.print();
+      setTimeout(function() { window.close(); }, 300);
+    };
+  </script>
+</body>
+</html>`
+
+  const win = window.open('', '_blank', 'width=380,height=700')
+  if (!win) { alert('Veuillez autoriser les pop-ups pour imprimer.'); return }
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }
 
 /* ═══════════════════════════════════════════════════════════════
