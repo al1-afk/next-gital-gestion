@@ -57,8 +57,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { label: 'Équipe',        href: '/equipe',       icon: Briefcase },
       { label: 'Fournisseurs',  href: '/fournisseurs', icon: Building2 },
-      { label: 'Domaines',      href: '/domaines',     icon: Globe },
-      { label: 'Hébergements',  href: '/hebergements', icon: Server },
     ],
   },
   {
