@@ -722,10 +722,11 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
     }
 
     return (
-      <div className="flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden" style={{ height: '100%' }}>
+      <div className="flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden h-[100dvh] max-h-[100dvh]">
 
-        {/* Top bar */}
-        <div className="flex items-center justify-between gap-2 px-3 md:px-5 py-2 md:py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+        {/* Top bar — sticky so it stays pinned while the form scrolls,
+            even on mobile browsers where the dynamic viewport jiggles. */}
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 px-3 md:px-5 py-2 md:py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <button onClick={() => setStep(1)}
               className="flex items-center gap-1 md:gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
@@ -782,7 +783,7 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
         </div>
 
         {/* Two-panel body */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* LEFT — Edit panel
               Mobile: full-width, only when mobileTab === 'edit'.
@@ -793,7 +794,7 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
               minWidth: 0,
               flexShrink: 0,
             }}
-            className={`bg-white dark:bg-slate-800 overflow-y-auto w-full md:w-[var(--panel-w)] md:min-w-[240px] md:max-w-[600px] ${
+            className={`bg-white dark:bg-slate-800 overflow-y-auto h-full w-full md:w-[var(--panel-w)] md:min-w-[240px] md:max-w-[600px] ${
               mobileTab === 'edit' ? 'block' : 'hidden md:block'
             }`}
           >
