@@ -6,10 +6,11 @@ import { pool } from './db/pool'
 import { apiLimiter, sanitizeBody, errorHandler } from './middleware/security'
 import helmet from 'helmet'
 
-import authRoutes   from './routes/auth'
-import crudRoutes   from './routes/crud'
-import tenantRoutes from './routes/tenants'
-import stockRoutes  from './routes/stock'
+import authRoutes     from './routes/auth'
+import crudRoutes     from './routes/crud'
+import tenantRoutes   from './routes/tenants'
+import stockRoutes    from './routes/stock'
+import vehiclesRoutes from './routes/vehicles'
 
 dotenv.config({ path: '.env.local' })
 
@@ -69,10 +70,11 @@ app.use(sanitizeBody)
 app.use('/api', apiLimiter)
 
 /* ── Routes ─────────────────────────────────────────────────── */
-app.use('/api/auth',    authRoutes)
-app.use('/api/tenants', tenantRoutes)
-app.use('/api/stock',   stockRoutes)
-app.use('/api',         crudRoutes)
+app.use('/api/auth',     authRoutes)
+app.use('/api/tenants',  tenantRoutes)
+app.use('/api/stock',    stockRoutes)
+app.use('/api/vehicles', vehiclesRoutes)
+app.use('/api',          crudRoutes)
 
 /* ── Health check (no DB details in prod) ───────────────────── */
 app.get('/health', async (_req, res) => {

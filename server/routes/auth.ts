@@ -386,7 +386,8 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
   const { userId, tenantId } = req.user!
   try {
     const user = await queryOne(
-      `SELECT u.id, u.email, u.name, tu.role, t.slug, t.name as tenant_name, t.plan
+      `SELECT u.id, u.email, u.name, tu.role, tu.allowed_modules,
+              t.slug, t.name as tenant_name, t.plan
        FROM users u
        JOIN tenant_users tu ON tu.user_id = u.id
        JOIN tenants t ON t.id = tu.tenant_id

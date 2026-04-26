@@ -6,69 +6,106 @@ import {
   CreditCard, DollarSign, TrendingUp, Globe, Server, Package, ShoppingCart,
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
-  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes,
+  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
+import { useVehicleAlerts } from '@/hooks/useVehicles'
+import { useAuth } from '@/hooks/useAuth'
 
 interface NavItem {
   label: string
   href:  string
   icon:  React.ElementType
   badge?: string
+  /** Module key — used by per-user access overrides. Same as href without leading slash; '' for dashboard */
+  module?: string
 }
+
+/** All module keys known to the sidebar — used by the access-management UI */
+export const ALL_MODULES: { key: string; label: string }[] = [
+  { key: 'dashboard',         label: 'Tableau de bord' },
+  { key: 'prospects',         label: 'CRM / Prospects' },
+  { key: 'clients',           label: 'Clients' },
+  { key: 'taches',            label: 'Tâches' },
+  { key: 'calendrier',        label: 'Calendrier' },
+  { key: 'devis',             label: 'Devis' },
+  { key: 'factures',          label: 'Factures' },
+  { key: 'contrats',          label: 'Contrats' },
+  { key: 'bons-commande',     label: 'Bons de commande' },
+  { key: 'produits',          label: 'Produits & Services' },
+  { key: 'produits-stock',    label: 'Produits & Stock' },
+  { key: 'paiements',         label: 'Paiements' },
+  { key: 'cheques-recus',     label: 'Chèques reçus' },
+  { key: 'cheques-emis',      label: 'Chèques émis' },
+  { key: 'depenses',          label: 'Dépenses' },
+  { key: 'finances',          label: 'Finances' },
+  { key: 'abonnements',       label: 'Abonnements' },
+  { key: 'abonnements-clients', label: 'Abonnements clients' },
+  { key: 'equipe',            label: 'Équipe' },
+  { key: 'fournisseurs',      label: 'Fournisseurs' },
+  { key: 'vehicules',         label: 'Véhicules' },
+  { key: 'statistiques',      label: 'Statistiques' },
+  { key: 'activite',          label: 'Journal d\'activité' },
+  { key: 'conseiller-ia',     label: 'Conseiller IA' },
+  { key: 'automatisations',   label: 'Automatisations' },
+  { key: 'integrations',      label: 'Intégrations' },
+  { key: 'rapports',          label: 'Rapports & Export' },
+  { key: 'bientot',           label: 'Bientôt' },
+]
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: 'Principal',
     items: [
-      { label: 'Tableau de bord', href: '/',          icon: LayoutDashboard },
-      { label: 'CRM / Prospects', href: '/prospects', icon: UserCheck, badge: 'IA' },
-      { label: 'Clients',         href: '/clients',   icon: Users },
-      { label: 'Tâches',          href: '/taches',    icon: CheckSquare },
-      { label: 'Calendrier',      href: '/calendrier',icon: CalendarDays },
+      { label: 'Tableau de bord', href: '/',          icon: LayoutDashboard, module: 'dashboard' },
+      { label: 'CRM / Prospects', href: '/prospects', icon: UserCheck, badge: 'IA', module: 'prospects' },
+      { label: 'Clients',         href: '/clients',   icon: Users, module: 'clients' },
+      { label: 'Tâches',          href: '/taches',    icon: CheckSquare, module: 'taches' },
+      { label: 'Calendrier',      href: '/calendrier',icon: CalendarDays, module: 'calendrier' },
     ],
   },
   {
     title: 'Commercial',
     items: [
-      { label: 'Devis',               href: '/devis',        icon: FileText },
-      { label: 'Factures',            href: '/factures',     icon: Receipt },
-      { label: 'Contrats',            href: '/contrats',     icon: FileSignature },
-      { label: 'Bons de commande',    href: '/bons-commande',icon: ShoppingCart },
-      { label: 'Produits & Services', href: '/produits',     icon: Package },
-      { label: 'Produits & Stock',    href: '/produits-stock', icon: Boxes, badge: 'Stock' },
+      { label: 'Devis',               href: '/devis',        icon: FileText, module: 'devis' },
+      { label: 'Factures',            href: '/factures',     icon: Receipt, module: 'factures' },
+      { label: 'Contrats',            href: '/contrats',     icon: FileSignature, module: 'contrats' },
+      { label: 'Bons de commande',    href: '/bons-commande',icon: ShoppingCart, module: 'bons-commande' },
+      { label: 'Produits & Services', href: '/produits',     icon: Package, module: 'produits' },
+      { label: 'Produits & Stock',    href: '/produits-stock', icon: Boxes, badge: 'Stock', module: 'produits-stock' },
     ],
   },
   {
     title: 'Finance',
     items: [
-      { label: 'Paiements',      href: '/paiements',    icon: CreditCard },
-      { label: 'Chèques reçus',  href: '/cheques-recus',icon: Banknote },
-      { label: 'Chèques émis',   href: '/cheques-emis', icon: Wallet },
-      { label: 'Dépenses',       href: '/depenses',     icon: DollarSign },
-      { label: 'Finances',       href: '/finances',     icon: TrendingUp },
-      { label: 'Abonnements',         href: '/abonnements',         icon: Repeat },
-      { label: 'Abonnements Clients', href: '/abonnements-clients',  icon: RefreshCcw, badge: 'MRR' },
+      { label: 'Paiements',      href: '/paiements',    icon: CreditCard, module: 'paiements' },
+      { label: 'Chèques reçus',  href: '/cheques-recus',icon: Banknote, module: 'cheques-recus' },
+      { label: 'Chèques émis',   href: '/cheques-emis', icon: Wallet, module: 'cheques-emis' },
+      { label: 'Dépenses',       href: '/depenses',     icon: DollarSign, module: 'depenses' },
+      { label: 'Finances',       href: '/finances',     icon: TrendingUp, module: 'finances' },
+      { label: 'Abonnements',         href: '/abonnements',         icon: Repeat, module: 'abonnements' },
+      { label: 'Abonnements Clients', href: '/abonnements-clients',  icon: RefreshCcw, badge: 'MRR', module: 'abonnements-clients' },
     ],
   },
   {
     title: 'Ressources',
     items: [
-      { label: 'Équipe',        href: '/equipe',       icon: Briefcase },
-      { label: 'Fournisseurs',  href: '/fournisseurs', icon: Building2 },
+      { label: 'Équipe',         href: '/equipe',       icon: Briefcase, module: 'equipe' },
+      { label: 'Fournisseurs',   href: '/fournisseurs', icon: Building2, module: 'fournisseurs' },
+      { label: 'Véhicules',      href: '/vehicules',    icon: Car, badge: 'Vehicles', module: 'vehicules' },
     ],
   },
   {
     title: 'Analyse',
     items: [
-      { label: 'Statistiques',       href: '/statistiques',  icon: BarChart3 },
-      { label: "Journal d'activité", href: '/activite',      icon: Activity },
-      { label: 'Conseiller IA',      href: '/conseiller-ia',    icon: Bot,     badge: 'IA'   },
-      { label: 'Automatisations',    href: '/automatisations',  icon: Zap,     badge: 'Auto' },
-      { label: 'Intégrations',       href: '/integrations',     icon: PlugZap },
-      { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown },
-      { label: 'Bientôt',            href: '/bientot',          icon: Rocket,  badge: 'Soon' },
+      { label: 'Statistiques',       href: '/statistiques',  icon: BarChart3, module: 'statistiques' },
+      { label: "Journal d'activité", href: '/activite',      icon: Activity, module: 'activite' },
+      { label: 'Conseiller IA',      href: '/conseiller-ia',    icon: Bot,     badge: 'IA', module: 'conseiller-ia' },
+      { label: 'Automatisations',    href: '/automatisations',  icon: Zap,     badge: 'Auto', module: 'automatisations' },
+      { label: 'Intégrations',       href: '/integrations',     icon: PlugZap, module: 'integrations' },
+      { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown, module: 'rapports' },
+      { label: 'Bientôt',            href: '/bientot',          icon: Rocket,  badge: 'Soon', module: 'bientot' },
     ],
   },
 ]
@@ -93,6 +130,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>(getInitialExpanded)
   const { data: stockAlerts = [] } = useStockAlerts()
   const stockAlertCount = stockAlerts.length
+  const { data: vehicleAlerts } = useVehicleAlerts()
+  const vehicleAlertCount = (vehicleAlerts?.documents.length ?? 0) + (vehicleAlerts?.maintenance.length ?? 0)
+
+  /* Per-user module filter — admins see everything; others get the
+     allowed_modules list when set, role default otherwise */
+  const { role: userRole, allowedModules } = useAuth()
+  const filterItem = (item: NavItem): boolean => {
+    if (userRole === 'admin') return true
+    /* No module key on item → show by default (Settings link, etc.) */
+    if (!item.module) return true
+    /* Explicit override: only the listed modules are visible */
+    if (Array.isArray(allowedModules)) return allowedModules.includes(item.module)
+    /* No override yet — let everything through (role-default behaviour). */
+    return true
+  }
+  const VISIBLE_GROUPS = NAV_GROUPS
+    .map(g => ({ ...g, items: g.items.filter(filterItem) }))
+    .filter(g => g.items.length > 0)
 
   const toggleGroup = (title: string) => {
     setExpandedGroups(prev => {
@@ -162,7 +217,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* ── Navigation ── */}
       <div className="flex-1 overflow-y-auto py-4 px-2.5 space-y-0.5">
-        {NAV_GROUPS.map(group => (
+        {VISIBLE_GROUPS.map(group => (
           <div key={group.title} className="mb-2">
 
             {/* Section label */}
@@ -268,6 +323,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                                   : 'bg-red-50 text-red-600 border border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800/50'
                               )}>
                                 {stockAlertCount}
+                              </span>
+                            )}
+                            {item.badge === 'Vehicles' && vehicleAlertCount > 0 && (
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none',
+                                isActive
+                                  ? 'bg-white/20 text-white border border-white/30'
+                                  : 'bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800/50'
+                              )}>
+                                {vehicleAlertCount}
                               </span>
                             )}
                           </>

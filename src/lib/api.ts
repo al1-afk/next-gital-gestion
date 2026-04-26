@@ -103,9 +103,11 @@ export const authApi = {
       '/api/auth/register', data
     ),
 
-  me: () => api.get<{ id: string; email: string; name: string; role: string; slug: string; tenant_name: string; plan: string }>(
-    '/api/auth/me'
-  ),
+  me: () => api.get<{
+    id: string; email: string; name: string; role: string;
+    slug: string; tenant_name: string; plan: string;
+    allowed_modules: string[] | null;
+  }>('/api/auth/me'),
 
   forgotPassword: (email: string) =>
     api.publicPost<{ success: boolean }>('/api/auth/forgot-password', { email }),
@@ -123,10 +125,16 @@ export const tenantApi = {
     api.publicGet<{ id: string; slug: string; name: string; plan: string; logo_url: string | null; primary_color: string }>(
       `/api/tenants/resolve/${slug}`
     ),
-  members:      ()            => api.get('/api/tenants/members'),
+  members:      ()            => api.get<Array<{ user_id: string; email: string; name: string; role: string; status: string }>>('/api/tenants/members'),
   update:       (data: any)   => api.patch('/api/tenants', data),
   invite:       (email: string, role: string) => api.post('/api/tenants/invite', { email, role }),
   revokeMember: (id: string)  => api.delete(`/api/tenants/members/${id}`),
+  getAccess:    (userId: string) =>
+    api.get<{ allowed_modules: string[] | null; role: string }>(`/api/tenants/members/${userId}/access`),
+  setAccess:    (userId: string, allowed_modules: string[] | null) =>
+    api.patch<{ allowed_modules: string[] | null; role: string }>(
+      `/api/tenants/members/${userId}/access`, { allowed_modules }
+    ),
 }
 
 /* ── Generic table API ───────────────────────────────────────── */

@@ -85,4 +85,46 @@ router.delete('/members/:userId', requireAuth, async (req, res) => {
   res.json({ success: true })
 })
 
+/* ── GET /api/tenants/members/:userId/access ─────────────────── */
+router.get('/members/:userId/access', requireAuth, async (req, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'Admin requis' })
+  const row = await queryOne<{ allowed_modules: string[] | null; role: string }>(
+    `SELECT allowed_modules, role FROM tenant_users
+      WHERE user_id = $1 AND tenant_id = $2`,
+    [req.params.userId, req.user!.tenantId]
+  )
+  if (!row) return res.status(404).json({ error: 'Membre introuvable' })
+  res.json(row)
+})
+
+/* ── PATCH /api/tenants/members/:userId/access ───────────────── */
+router.patch('/members/:userId/access', requireAuth, async (req, res) => {
+  if (req.user!.role !== 'admin') return res.status(403).json({ error: 'Admin requis' })
+  const { allowed_modules } = req.body ?? {}
+  /* Refuse self-edit so an admin can't lock themselves out */
+  if (req.params.userId === req.user!.userId) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas restreindre vos propres accès' })
+  }
+  /* `null` resets to role-default; array stores explicit list */
+  let value: string[] | null
+  if (allowed_modules === null || allowed_modules === undefined) {
+    value = null
+  } else if (Array.isArray(allowed_modules)) {
+    /* Whitelist module identifiers — letters, digits, underscore, dash */
+    value = allowed_modules
+      .filter(m => typeof m === 'string' && /^[a-z0-9_-]{1,40}$/i.test(m))
+      .slice(0, 80)
+  } else {
+    return res.status(400).json({ error: 'allowed_modules doit être un tableau ou null' })
+  }
+  const row = await queryOne(
+    `UPDATE tenant_users SET allowed_modules = $1
+      WHERE user_id = $2 AND tenant_id = $3
+      RETURNING allowed_modules, role`,
+    [value, req.params.userId, req.user!.tenantId]
+  )
+  if (!row) return res.status(404).json({ error: 'Membre introuvable' })
+  res.json(row)
+})
+
 export default router
