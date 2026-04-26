@@ -84,6 +84,8 @@ export default function App() {
               <Route path="calendrier"                 element={<Calendrier />} />
               <Route path="devis"                      element={<Devis />} />
               <Route path="devis/:id/preview"          element={<DevisPreview />} />
+              {/* Backwards-compat: old shared links missing the /devis/ segment */}
+              <Route path=":id/preview"                element={<DevisPreview />} />
               <Route path="factures"                   element={<Factures />} />
               <Route path="contrats"                   element={<Contrats />} />
               <Route path="bons-commande"              element={<BonsCommande />} />
