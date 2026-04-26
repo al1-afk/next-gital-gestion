@@ -442,10 +442,13 @@ function SalairesTab({ members }: { members: TeamMember[] }) {
   const [entries, setEntries] = useState<Record<string, SalairePaiement>>({})
   const [editing, setEditing] = useState<string | null>(null)
 
-  const { data: allSalaires = [] } = useQuery<SalairePaiement[]>({
+  const { data: allSalairesRaw } = useQuery<SalairePaiement[]>({
     queryKey: ['salaires_paiements'],
     queryFn: () => salairesPaiementsApi.list() as Promise<SalairePaiement[]>,
   })
+  /* Stable reference for the effect dep — destructure-default `= []`
+     creates a fresh array every render and would loop the effect. */
+  const allSalaires = useMemo(() => allSalairesRaw ?? [], [allSalairesRaw])
 
   useEffect(() => {
     const forPeriod = allSalaires.filter(s => s.year === year && s.month === month)
