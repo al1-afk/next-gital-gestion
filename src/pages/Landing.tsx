@@ -9,6 +9,7 @@ import {
   Bell, Shield, Globe, Wallet, Calendar, Smartphone, Palette,
   Sparkles, Brain, Command, Languages, Moon, ArrowRight, Zap,
   Lock as LockIcon, FileSpreadsheet, Clock,
+  Boxes, ReceiptText, Car, MapPin, Crown,
 } from 'lucide-react'
 import { authApi, tokenStore } from '@/lib/api'
 
@@ -146,8 +147,184 @@ const itemV: Variants = {
   show:   { opacity: 1, y: 0,  filter: 'blur(0px)', transition: { type: 'spring', stiffness: 100, damping: 18 } },
 }
 
+/* ─── Bilingual content (FR / AR) ─────────────────────────── */
+type Lang = 'fr' | 'ar'
+const I18N = {
+  fr: {
+    signin:        'Se connecter',
+    badge:         'Gratuit pour commencer — aucune carte requise',
+    heroTitle1:    'Gérez vos clients et factures en 1 minute —',
+    heroAccent:    'sans Excel',
+    heroSub:       'Simple, rapide, et adapté aux petites entreprises. Tout ce dont vous avez besoin, rien de plus.',
+    bullet1:       'Sans formation',
+    bullet2:       'Données sécurisées',
+    bullet3:       'Support réactif',
+    formTitle:     'Créer mon compte gratuit',
+    formSub:       'Prêt en 60 secondes',
+    fName:         'Votre prénom',
+    fCompany:      "Nom de l'entreprise",
+    fEmail:        'Email',
+    fPassword:     'Mot de passe',
+    fHint:         '8 caractères minimum',
+    formCta:       'Créer mon compte gratuit',
+    formFoot:      'Pas de carte bancaire · Annulable à tout moment',
+    statsCo:       'Entreprises',
+    statsFac:      'Factures',
+    statsSat:      'Satisfaction',
+    featuresKicker:'Fonctionnalités principales',
+    featuresTitle1:'Tout ce dont vous avez besoin,',
+    featuresTitle2:'au même endroit',
+    featuresSub:   '12 modules puissants qui remplacent vos 10 outils dispersés.',
+    pricingKicker: 'Tarifs',
+    pricingTitle1: 'Un prix juste,',
+    pricingTitle2: 'adapté au Maroc',
+    pricingSub:    'Sans frais cachés. Annulable à tout moment.',
+    pricingPerMo:  '/ mois',
+    pricingChoose: 'Choisir ce plan',
+    pricingPopular:'Le plus populaire',
+    pricingCustom: 'Sur devis',
+    pricingFoot:   'TVA non applicable. Hébergement et données sécurisées au Maroc.',
+    finalTitle1:   'Prêt à gagner du temps',
+    finalTitle2:   'chaque semaine ?',
+    finalSub:      'Rejoignez des centaines de petites entreprises qui ont arrêté Excel.',
+    finalCta:      'Créer mon compte gratuit',
+    finalFoot:     'Sans carte bancaire · Sans engagement',
+    footer:        '© 2026 GestiQ — Tous droits réservés',
+  },
+  ar: {
+    signin:        'تسجيل الدخول',
+    badge:         'مجاني للبدء — لا حاجة لبطاقة بنكية',
+    heroTitle1:    'سيّر عملاءك وفواتيرك في دقيقة واحدة —',
+    heroAccent:    'بدون Excel',
+    heroSub:       'بسيط، سريع، ومُكيّف للمقاولات الصغيرة. كل ما تحتاج، لا أكثر.',
+    bullet1:       'بدون تكوين',
+    bullet2:       'بيانات آمنة',
+    bullet3:       'دعم سريع',
+    formTitle:     'إنشاء حسابي المجاني',
+    formSub:       'جاهز في 60 ثانية',
+    fName:         'الاسم الشخصي',
+    fCompany:      'اسم المقاولة',
+    fEmail:        'البريد الإلكتروني',
+    fPassword:     'كلمة السر',
+    fHint:         '8 أحرف على الأقل',
+    formCta:       'إنشاء حسابي المجاني',
+    formFoot:      'بدون بطاقة بنكية · يمكن الإلغاء في أي وقت',
+    statsCo:       'مقاولة',
+    statsFac:      'فاتورة',
+    statsSat:      'رضا الزبائن',
+    featuresKicker:'المميزات الأساسية',
+    featuresTitle1:'كل ما تحتاجه،',
+    featuresTitle2:'في مكان واحد',
+    featuresSub:   '12 وحدة قوية تعوّض 10 أدوات متفرقة.',
+    pricingKicker: 'الأسعار',
+    pricingTitle1: 'سعر منصف،',
+    pricingTitle2: 'يناسب المغرب',
+    pricingSub:    'بدون رسوم خفية. يمكن الإلغاء في أي وقت.',
+    pricingPerMo:  '/ شهرياً',
+    pricingChoose: 'اختر هذا العرض',
+    pricingPopular:'الأكثر طلباً',
+    pricingCustom: 'حسب الطلب',
+    pricingFoot:   'TVA غير مطبقة. الاستضافة والبيانات آمنة بالمغرب.',
+    finalTitle1:   'مستعد توفر وقتك',
+    finalTitle2:   'كل أسبوع؟',
+    finalSub:      'انضم لمئات المقاولات الصغيرة اللي وقفت Excel.',
+    finalCta:      'إنشاء حسابي المجاني',
+    finalFoot:     'بدون بطاقة بنكية · بدون التزام',
+    footer:        '© 2026 GestiQ — جميع الحقوق محفوظة',
+  },
+} as const
+
+const PRICING_PLANS = [
+  {
+    key:        'gratuit',
+    fr:         { name: 'Gratuit',  price: '0',   tag: 'Idéal pour commencer' },
+    ar:         { name: 'مجاني',    price: '0',   tag: 'مثالي للبداية' },
+    highlight:  false,
+    icon:       Sparkles,
+    color:      'from-slate-400 to-slate-600',
+    cta:        '/',
+    features: {
+      fr: [
+        '1 utilisateur',
+        '50 clients · 30 factures / mois',
+        'Devis & factures PDF',
+        'Tableau de bord',
+        'Sauvegarde quotidienne',
+      ],
+      ar: [
+        'مستخدم واحد',
+        '50 عميل · 30 فاتورة / شهر',
+        'عروض الأسعار + فواتير PDF',
+        'لوحة قيادة',
+        'نسخ احتياطي يومي',
+      ],
+    },
+  },
+  {
+    key:        'pro',
+    fr:         { name: 'Pro',      price: '199', tag: 'Le plus populaire' },
+    ar:         { name: 'محترف',    price: '199', tag: 'الأكثر طلباً' },
+    highlight:  true,
+    icon:       Crown,
+    color:      'from-indigo-500 via-purple-500 to-pink-500',
+    cta:        '/',
+    features: {
+      fr: [
+        '5 utilisateurs',
+        'Clients & factures illimités',
+        'Stock + Tickets de caisse',
+        'CRM Prospects + Pipeline',
+        'Conseiller IA + Automatisations',
+        'Multi-établissements',
+        'Support prioritaire',
+      ],
+      ar: [
+        '5 مستخدمين',
+        'عملاء وفواتير بدون حدود',
+        'المخزون + تذاكر الصندوق',
+        'CRM للزبائن المحتملين',
+        'مستشار AI + الأتمتة',
+        'فروع متعددة',
+        'دعم سريع',
+      ],
+    },
+  },
+  {
+    key:        'business',
+    fr:         { name: 'Business', price: '499', tag: 'Pour équipes en croissance' },
+    ar:         { name: 'الأعمال',  price: '499', tag: 'للفِرَق النامية' },
+    highlight:  false,
+    icon:       Shield,
+    color:      'from-emerald-500 to-teal-600',
+    cta:        '/',
+    features: {
+      fr: [
+        '20 utilisateurs',
+        'Tout du plan Pro',
+        'Suivi GPS de la flotte',
+        'Véhicules + carburant + entretien',
+        'Permissions fines par membre',
+        'Rapports avancés + exports',
+        'Manager dédié',
+      ],
+      ar: [
+        '20 مستخدم',
+        'كل ما في عرض Pro',
+        'تتبع GPS للأسطول',
+        'السيارات + الوقود + الصيانة',
+        'صلاحيات دقيقة لكل عضو',
+        'تقارير متقدمة + تصدير',
+        'مرافق مخصص',
+      ],
+    },
+  },
+]
+
 export default function Landing() {
   const navigate = useNavigate()
+  const [lang, setLang]           = useState<Lang>('fr')
+  const t = I18N[lang]
+  const isRTL = lang === 'ar'
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
   const [name, setName]           = useState('')
@@ -184,7 +361,11 @@ export default function Landing() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 text-slate-900 overflow-x-clip">
+    <div
+      lang={lang}
+      dir={isRTL ? 'rtl' : 'ltr'}
+      className="min-h-[100dvh] bg-slate-50 text-slate-900 overflow-x-clip"
+    >
 
       {/* ── Nav ─────────────────────────────────────────────── */}
       <motion.nav
@@ -201,9 +382,22 @@ export default function Landing() {
             </div>
             <span className="font-bold text-slate-900 text-lg tracking-tight">GestiQ</span>
           </motion.div>
-          <a href="/auth" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">
-            Se connecter
-          </a>
+          <div className="flex items-center gap-3">
+            {/* Language toggle */}
+            <div className="inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-semibold">
+              <button
+                onClick={() => setLang('fr')}
+                className={`px-2.5 py-1 rounded-full transition-colors ${lang === 'fr' ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-700'}`}
+              >FR</button>
+              <button
+                onClick={() => setLang('ar')}
+                className={`px-2.5 py-1 rounded-full transition-colors ${lang === 'ar' ? 'bg-white text-slate-900 shadow' : 'text-slate-500 hover:text-slate-700'}`}
+              >ع</button>
+            </div>
+            <a href="/auth" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors">
+              {t.signin}
+            </a>
+          </div>
         </div>
       </motion.nav>
 
@@ -221,14 +415,14 @@ export default function Landing() {
                 <span className="absolute inline-flex w-full h-full rounded-full bg-purple-400 animate-ping opacity-75" />
                 <span className="relative inline-flex rounded-full w-1.5 h-1.5 bg-purple-500" />
               </span>
-              Gratuit pour commencer — aucune carte requise
+              {t.badge}
             </motion.div>
 
             <motion.h1 variants={itemV} className="text-4xl lg:text-6xl font-bold text-slate-900 leading-[1.08] tracking-tight mb-5">
-              Gérez vos clients et factures en 1 minute —{' '}
+              {t.heroTitle1}{' '}
               <span className="relative inline-block">
                 <span className="bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899,#a855f7,#6366f1)] bg-[length:300%_auto] animate-gradient-pan bg-clip-text text-transparent">
-                  sans Excel
+                  {t.heroAccent}
                 </span>
                 <motion.svg
                   viewBox="0 0 200 12" fill="none"
@@ -256,11 +450,11 @@ export default function Landing() {
             </motion.h1>
 
             <motion.p variants={itemV} className="text-slate-600 text-lg mb-8 max-w-xl">
-              Simple, rapide, et adapté aux petites entreprises. Tout ce dont vous avez besoin, rien de plus.
+              {t.heroSub}
             </motion.p>
 
             <motion.div variants={itemV} className="flex flex-wrap gap-4">
-              {['Sans formation', 'Données sécurisées', 'Support réactif'].map(f => (
+              {[t.bullet1, t.bullet2, t.bullet3].map(f => (
                 <span key={f} className="flex items-center gap-1.5 text-sm text-slate-600">
                   <CheckCircle className="w-4 h-4 text-purple-600 shrink-0" />
                   {f}
@@ -271,9 +465,9 @@ export default function Landing() {
             {/* Social proof counters */}
             <motion.div variants={itemV} className="mt-10 grid grid-cols-3 gap-6 max-w-md">
               {[
-                { v: 500, suf: '+',  l: 'Entreprises' },
-                { v: 12,  suf: 'k+', l: 'Factures' },
-                { v: 99,  suf: '%',  l: 'Satisfaction' },
+                { v: 500, suf: '+',  l: t.statsCo },
+                { v: 12,  suf: 'k+', l: t.statsFac },
+                { v: 99,  suf: '%',  l: t.statsSat },
               ].map(s => (
                 <div key={s.l}>
                   <div className="text-2xl font-bold bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
@@ -296,17 +490,17 @@ export default function Landing() {
               <div className="relative bg-white/90 backdrop-blur-xl border border-white rounded-3xl p-8 shadow-2xl shadow-purple-500/20">
                 <div className="flex items-center gap-2 mb-1">
                   <Sparkles className="w-4 h-4 text-purple-600" />
-                  <h2 className="text-xl font-bold text-slate-900">Créer mon compte gratuit</h2>
+                  <h2 className="text-xl font-bold text-slate-900">{t.formTitle}</h2>
                 </div>
-                <p className="text-slate-500 text-sm mb-6">Prêt en 60 secondes</p>
+                <p className="text-slate-500 text-sm mb-6">{t.formSub}</p>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <InputField label="Votre prénom *" value={name} setValue={setName} placeholder="Ahmed" required />
-                    <InputField label="Nom de l'entreprise" value={company} setValue={setCompany} placeholder="Mon Entreprise" />
+                    <InputField label={`${t.fName} *`} value={name} setValue={setName} placeholder="Ahmed" required />
+                    <InputField label={t.fCompany} value={company} setValue={setCompany} placeholder="Mon Entreprise" />
                   </div>
-                  <InputField label="Email *" value={email} setValue={setEmail} placeholder="vous@email.com" type="email" required />
-                  <InputField label="Mot de passe *" value={password} setValue={setPassword} placeholder="8 caractères minimum" type="password" required />
+                  <InputField label={`${t.fEmail} *`} value={email} setValue={setEmail} placeholder="vous@email.com" type="email" required />
+                  <InputField label={`${t.fPassword} *`} value={password} setValue={setPassword} placeholder={t.fHint} type="password" required />
 
                   <AnimatePresence>
                     {error && (
@@ -331,15 +525,15 @@ export default function Landing() {
                   >
                     <span className="absolute inset-0 bg-white/20 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700 skew-x-[-20deg]" />
                     {loading ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Création en cours...</>
+                      <><Loader2 className="w-4 h-4 animate-spin" /> ...</>
                     ) : (
-                      <>Créer mon compte gratuit <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></>
+                      <>{t.formCta} <ArrowRight className={`w-4 h-4 group-hover:translate-x-1 transition-transform ${isRTL ? 'rotate-180' : ''}`} /></>
                     )}
                   </motion.button>
                 </form>
 
                 <p className="text-center text-xs text-slate-500 mt-4">
-                  Pas de carte bancaire · Annulable à tout moment
+                  {t.formFoot}
                 </p>
               </div>
             </TiltCard>
@@ -467,13 +661,13 @@ export default function Landing() {
               Fonctionnalités principales
             </motion.div>
             <motion.h2 variants={itemV} className="text-3xl lg:text-5xl font-bold text-slate-900 mb-4 tracking-tight">
-              Tout ce dont vous avez besoin,<br/>
+              {t.featuresTitle1}<br/>
               <span className="bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899,#a855f7,#6366f1)] bg-[length:300%_auto] animate-gradient-pan bg-clip-text text-transparent">
-                au même endroit
+                {t.featuresTitle2}
               </span>
             </motion.h2>
             <motion.p variants={itemV} className="text-slate-600 max-w-2xl mx-auto text-lg">
-              10 modules puissants qui remplacent vos 10 outils dispersés.
+              {t.featuresSub}
             </motion.p>
           </div>
 
@@ -488,6 +682,8 @@ export default function Landing() {
               { icon: Wallet,     emoji: '💼', title: 'Gestion des dépenses',         iconBg: 'bg-rose-100',    iconColor: 'text-rose-600',    ring: 'from-rose-500 to-pink-500',        features: ['Catégories personnalisables','Fournisseurs avec historique des paiements','Import / Export Excel et CSV','Suivi précis des charges'] },
               { icon: Calendar,   emoji: '📅', title: 'Organisation & Productivité',  iconBg: 'bg-fuchsia-100', iconColor: 'text-fuchsia-600', ring: 'from-fuchsia-500 to-pink-500',     features: ['Calendrier intégré (réunions, tâches, échéances)',"Tâches personnelles et d'équipe",'Recherche globale (Cmd+K)','Raccourcis clavier pour la rapidité'] },
               { icon: Smartphone, emoji: '📱', title: 'Mobile & PWA',                 iconBg: 'bg-teal-100',    iconColor: 'text-teal-600',    ring: 'from-teal-500 to-emerald-500',     features: ['Application installable (PWA)','Fonctionne hors ligne','Synchronisation auto au retour du réseau','Interface 100% responsive'] },
+              { icon: Boxes,      emoji: '📦', title: 'Stock & Tickets de caisse',    iconBg: 'bg-cyan-100',    iconColor: 'text-cyan-600',    ring: 'from-cyan-500 to-blue-500',        features: ['Catalogue produits + SKU + photos','Mouvements (entrée / sortie / ajustement)','Alertes stock faible & rupture','Tickets de caisse imprimables, stock décrémenté auto'] },
+              { icon: Car,        emoji: '🚗', title: 'Flotte & Suivi GPS',           iconBg: 'bg-orange-100',  iconColor: 'text-orange-600',  ring: 'from-orange-500 to-red-500',       features: ['Parc auto : kilométrage, conducteur, statut','Carburant + entretien + documents (assurance, vignette, VT)','Carte GPS temps réel — flotte sur Google Maps','Alertes : visite technique, vidange à venir'] },
               { icon: Palette,    emoji: '🎨', title: 'Expérience utilisateur',       iconBg: 'bg-pink-100',    iconColor: 'text-pink-600',    ring: 'from-pink-500 to-rose-500',        features: ['Dark / Light Mode','Multilingue : Darija, Français, Arabe, Anglais','Onboarding interactif pour nouveaux utilisateurs','Import / Export simples'] },
             ].map(f => {
               const Icon = f.icon
@@ -610,6 +806,104 @@ export default function Landing() {
         </div>
       </motion.section>
 
+      {/* ── Pricing ─────────────────────────────────────────── */}
+      <motion.section
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: '-10% 0px' }}
+        variants={containerV}
+        className="py-24 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden"
+      >
+        <div className="absolute -top-32 right-0 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-purple-200/30 to-pink-200/30 blur-3xl" />
+        <div className="absolute -bottom-32 left-0 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-indigo-200/30 to-purple-200/30 blur-3xl" />
+
+        <div className="relative max-w-6xl mx-auto px-6">
+          <div className="text-center mb-14">
+            <motion.div variants={itemV} className="inline-flex items-center gap-2 bg-white border border-purple-200/70 rounded-full px-3 py-1 text-xs font-medium text-purple-700 mb-4 shadow-sm">
+              <Sparkles className="w-3 h-3" />
+              {t.pricingKicker}
+            </motion.div>
+            <motion.h2 variants={itemV} className="text-3xl lg:text-5xl font-bold text-slate-900 mb-3 tracking-tight">
+              {t.pricingTitle1}{' '}
+              <span className="bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899,#a855f7,#6366f1)] bg-[length:300%_auto] animate-gradient-pan bg-clip-text text-transparent">
+                {t.pricingTitle2}
+              </span>
+            </motion.h2>
+            <motion.p variants={itemV} className="text-slate-600 max-w-xl mx-auto text-lg">
+              {t.pricingSub}
+            </motion.p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+            {PRICING_PLANS.map(plan => {
+              const PlanIcon = plan.icon
+              const tr = plan[lang]
+              const features = plan.features[lang]
+              return (
+                <motion.div
+                  key={plan.key}
+                  variants={itemV}
+                  whileHover={{ y: -6 }}
+                  className={`relative ${plan.highlight ? 'md:-my-3' : ''}`}
+                >
+                  {plan.highlight && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899)] text-white shadow-lg shadow-purple-500/40">
+                        <Crown className="w-3 h-3" /> {t.pricingPopular}
+                      </span>
+                    </div>
+                  )}
+                  <div className={`absolute -inset-[2px] rounded-[26px] bg-gradient-to-br ${plan.color} ${plan.highlight ? 'opacity-90 blur-md' : 'opacity-0 group-hover:opacity-50 blur-md'} transition-opacity`} />
+                  <div className={`relative h-full bg-white border rounded-3xl p-7 shadow-xl flex flex-col ${plan.highlight ? 'border-transparent shadow-purple-500/20' : 'border-slate-200'}`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${plan.color} flex items-center justify-center text-white shadow`}>
+                        <PlanIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{tr.name}</h3>
+                        <p className="text-xs text-slate-500">{tr.tag}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 mb-5">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-5xl font-extrabold text-slate-900">{tr.price}</span>
+                        <span className="text-sm font-semibold text-slate-500">MAD</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">{t.pricingPerMo}</div>
+                    </div>
+
+                    <ul className="space-y-2.5 mb-6 flex-1">
+                      {features.map(item => (
+                        <li key={item} className="flex items-start gap-2 text-sm text-slate-700">
+                          <CheckCircle className={`w-4 h-4 shrink-0 mt-0.5 ${plan.highlight ? 'text-purple-600' : 'text-emerald-600'}`} />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
+                        plan.highlight
+                          ? 'bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899)] text-white shadow-lg shadow-purple-500/30 hover:opacity-95'
+                          : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
+                      }`}
+                    >
+                      {t.pricingChoose}
+                    </button>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </div>
+
+          <p className="text-center text-xs text-slate-500 mt-10">
+            {t.pricingFoot}
+          </p>
+        </div>
+      </motion.section>
+
       {/* ── Final CTA ───────────────────────────────────────── */}
       <section className="relative py-24 bg-[linear-gradient(135deg,#6366f1,#a855f7,#ec4899)] bg-[length:200%_200%] animate-gradient-pan overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.2),_transparent_50%)]" />
@@ -632,25 +926,25 @@ export default function Landing() {
         >
           <Zap className="w-10 h-10 text-white mx-auto mb-5 animate-float-slow" />
           <h2 className="text-4xl lg:text-5xl font-bold text-white mb-5 tracking-tight">
-            Prêt à gagner du temps <br/>chaque semaine ?
+            {t.finalTitle1} <br/>{t.finalTitle2}
           </h2>
           <p className="text-white/90 mb-10 text-lg">
-            Rejoignez des centaines de petites entreprises qui ont arrêté Excel.
+            {t.finalSub}
           </p>
           <MagneticButton
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="group inline-flex items-center gap-2 bg-white hover:bg-slate-50 text-purple-700 font-semibold px-8 py-4 rounded-2xl text-sm transition-colors shadow-2xl"
           >
-            Créer mon compte gratuit
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {t.finalCta}
+            <ArrowRight className={`w-4 h-4 group-hover:translate-x-1 transition-transform ${isRTL ? 'rotate-180' : ''}`} />
           </MagneticButton>
-          <p className="text-xs text-white/70 mt-4">Sans carte bancaire · Sans engagement</p>
+          <p className="text-xs text-white/70 mt-4">{t.finalFoot}</p>
         </motion.div>
       </section>
 
       {/* ── Footer ──────────────────────────────────────────── */}
       <footer className="border-t border-slate-200 bg-white py-7 text-center text-xs text-slate-500">
-        © 2025 GestiQ — Tous droits réservés
+        {t.footer}
       </footer>
     </div>
   )
