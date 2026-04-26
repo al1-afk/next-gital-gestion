@@ -581,6 +581,10 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
   const [panelWidth, setPanelWidth] = useState(340)
   const isResizing = useRef(false)
 
+  /* ── Mobile view tab — split-screen is unusable below md, so on
+       small screens we toggle between the editor and the A4 preview. */
+  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
+
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
     isResizing.current = true
@@ -721,24 +725,54 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
       <div className="flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden" style={{ height: '100%' }}>
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-5 py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 px-3 md:px-5 py-2 md:py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <button onClick={() => setStep(1)}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
-              <ChevronLeft className="w-4 h-4" /> Client
+              className="flex items-center gap-1 md:gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Client</span>
             </button>
-            <div className="w-px h-5 bg-slate-200 dark:bg-slate-600" />
-            <span className="text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded select-none">
+            <div className="hidden sm:block w-px h-5 bg-slate-200 dark:bg-slate-600" />
+            <span className="hidden sm:inline-block text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded select-none truncate">
               {previewDevis.numero}
             </span>
+
+            {/* Mobile-only tab switcher */}
+            <div className="md:hidden flex items-center rounded-lg border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-50 dark:bg-slate-700/50">
+              <button
+                type="button"
+                onClick={() => setMobileTab('edit')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  mobileTab === 'edit'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                Édition
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('preview')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  mobileTab === 'preview'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                Aperçu
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <DevisActions templateRef={previewRef} numero={previewDevis.numero} />
-            <div className="w-px h-5 bg-slate-200 dark:bg-slate-600" />
+          <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+            <div className="hidden md:flex items-center gap-2">
+              <DevisActions templateRef={previewRef} numero={previewDevis.numero} />
+              <div className="w-px h-5 bg-slate-200 dark:bg-slate-600" />
+            </div>
             <Button size="sm" onClick={handleSubmit} disabled={busy}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-2.5 md:px-3 h-8">
               {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {editDevis ? 'Mettre à jour' : 'Créer le devis'}
+              <span className="hidden sm:inline">{editDevis ? 'Mettre à jour' : 'Créer le devis'}</span>
+              <span className="sm:hidden">{editDevis ? 'Maj' : 'Créer'}</span>
             </Button>
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
@@ -750,10 +784,18 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
         {/* Two-panel body */}
         <div className="flex flex-1 overflow-hidden">
 
-          {/* LEFT — Edit panel */}
+          {/* LEFT — Edit panel
+              Mobile: full-width, only when mobileTab === 'edit'.
+              Desktop: resizable fixed width, always visible. */}
           <div
-            style={{ width: panelWidth, minWidth: 240, maxWidth: 600, flexShrink: 0 }}
-            className="bg-white dark:bg-slate-800 overflow-y-auto"
+            style={{
+              ['--panel-w' as any]: `${panelWidth}px`,
+              minWidth: 0,
+              flexShrink: 0,
+            }}
+            className={`bg-white dark:bg-slate-800 overflow-y-auto w-full md:w-[var(--panel-w)] md:min-w-[240px] md:max-w-[600px] ${
+              mobileTab === 'edit' ? 'block' : 'hidden md:block'
+            }`}
           >
             <div className="p-4 space-y-5">
 
@@ -906,19 +948,24 @@ function DevisWizard({ onClose, editDevis, onStepChange }: {
             </div>
           </div>
 
-          {/* RESIZE HANDLE */}
+          {/* RESIZE HANDLE — desktop only */}
           <div
             onMouseDown={startResize}
-            className="w-1 flex-shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-[#1e64c4] active:bg-[#1e64c4] cursor-col-resize transition-colors relative group"
+            className="hidden md:block w-1 flex-shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-[#1e64c4] active:bg-[#1e64c4] cursor-col-resize transition-colors relative group"
             title="Glisser pour redimensionner"
           >
             <div className="absolute inset-y-0 -left-1 -right-1" />
           </div>
 
-          {/* RIGHT — Scaled A4 preview */}
-          <A4Preview>
-            <DevisTemplate ref={previewRef} devis={previewDevis} client={client} />
-          </A4Preview>
+          {/* RIGHT — Scaled A4 preview
+              Mobile: only when mobileTab === 'preview'. Desktop: always. */}
+          <div className={`flex-1 min-w-0 flex flex-col ${
+            mobileTab === 'preview' ? 'flex' : 'hidden md:flex'
+          }`}>
+            <A4Preview>
+              <DevisTemplate ref={previewRef} devis={previewDevis} client={client} />
+            </A4Preview>
+          </div>
         </div>
       </div>
     )
