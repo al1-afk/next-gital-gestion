@@ -2,10 +2,17 @@
  * DevisPreview — Full page that hosts the A4 template + action buttons.
  * Route: /devis/:id/preview
  */
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 
 import { ArrowLeft, Loader2, Copy, Check } from 'lucide-react'
+
+/* A4 document is 210mm × 297mm ≈ 794 × 1123 px @ 96 dpi. The template
+   itself is rendered at this fixed width; the wrapper scales it down
+   to fit narrower viewports (phones) while keeping the document
+   pixel-accurate for PDF export via templateRef. */
+const A4_W_PX = 794
+const A4_H_PX = 1123
 import { useDevis }   from '@/hooks/useDevis'
 import { useClients } from '@/hooks/useClients'
 import { Button }      from '@/components/ui/button'
@@ -16,7 +23,33 @@ export default function DevisPreview() {
   const { id, tenantSlug } = useParams<{ id: string; tenantSlug: string }>()
   const navigate    = useNavigate()
   const templateRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
+  const [scale, setScale] = useState(1)
+  const [pages, setPages] = useState(1)
+
+  /* Recompute scale whenever the scroll container resizes. */
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      const avail = el.clientWidth - 32  // 16px padding each side
+      setScale(Math.min(1, avail / A4_W_PX))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  /* Recompute page count whenever the document height changes. */
+  useEffect(() => {
+    const el = templateRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setPages(Math.max(1, Math.ceil(el.scrollHeight / A4_H_PX)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href)
@@ -89,22 +122,57 @@ export default function DevisPreview() {
         </div>
       </div>
 
-      {/* ── Scrollable A4 area ────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="min-h-full py-8 px-4 flex justify-center">
+      {/* ── Scrollable A4 area ──────────────────────────────
+          The template itself is rendered at A4 pixel width
+          (templateRef → PDF export needs full resolution); the
+          wrapper scales it down via CSS transform to fit narrow
+          viewports, with the outer box sized to the scaled height
+          so layout stays correct. */}
+      <div ref={containerRef} className="flex-1 overflow-y-auto">
+        <div className="py-6 md:py-8 px-4 flex justify-center">
           <div
             style={{
-              width: '210mm',
+              width:  A4_W_PX * scale,
+              height: A4_H_PX * scale * pages,
               flexShrink: 0,
-              alignSelf: 'flex-start',
-              boxShadow: '0 4px 40px rgba(0,0,0,0.18)',
-              borderRadius: '4px',
-              overflow: 'hidden',
+              position: 'relative',
             }}
           >
-            <DevisTemplate ref={templateRef} devis={devis} client={client} />
+            <div
+              style={{
+                width:           A4_W_PX,
+                transformOrigin: 'top left',
+                transform:       `scale(${scale})`,
+                boxShadow:       '0 4px 40px rgba(0,0,0,0.18)',
+                borderRadius:    '4px',
+                overflow:        'hidden',
+                background:      'white',
+              }}
+            >
+              <DevisTemplate ref={templateRef} devis={devis} client={client} />
+            </div>
+            {/* Page-break separators */}
+            {Array.from({ length: pages - 1 }).map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  position:   'absolute',
+                  left:       0,
+                  right:      0,
+                  top:        A4_H_PX * scale * (i + 1),
+                  height:     2,
+                  background: '#94a3b8',
+                  zIndex:     10,
+                }}
+              />
+            ))}
           </div>
         </div>
+        {pages > 1 && (
+          <div className="text-center text-xs text-slate-500 dark:text-slate-400 pb-3">
+            {pages} pages
+          </div>
+        )}
         <div className="h-12" />
       </div>
     </div>
