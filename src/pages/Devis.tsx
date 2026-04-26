@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import DOMPurify from 'dompurify'
 import {
   Plus, Search, Download, FileText, Loader2, Edit2, Trash2,
   ChevronRight, ChevronLeft, Check, Building2, Phone, Mail,
@@ -162,18 +163,29 @@ export function DescriptionPreview({
 }
 
 /* ─── helpers: blocks ↔ html ──────────────────────────────────────── */
+/* Allow only the inline tags the editor toolbar can produce. No <script>,
+   no event handlers, no javascript: URLs — DOMPurify enforces this. */
+const SANITIZE_OPTS = {
+  ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'u', 's', 'br', 'ul', 'ol', 'li', 'div', 'span', 'p'],
+  ALLOWED_ATTR: ['style'],
+}
+
+export function sanitizeDescription(html: string): string {
+  return DOMPurify.sanitize(html, SANITIZE_OPTS)
+}
+
 function blocksToHtml(blocks: DescriptionBlock[]): string {
   return blocks.map(b => {
     if (b.type === 'list') {
       const items = b.content.split('\n').filter(Boolean)
-      return `<ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`
+      return `<ul>${items.map(i => `<li>${sanitizeDescription(i)}</li>`).join('')}</ul>`
     }
-    return b.content
+    return sanitizeDescription(b.content)
   }).join('')
 }
 function htmlToBlocks(html: string): DescriptionBlock[] {
   if (!html.trim() || html === '<br>') return []
-  return [{ id: uid(), type: 'paragraph', content: html }]
+  return [{ id: uid(), type: 'paragraph', content: sanitizeDescription(html) }]
 }
 
 /* ─── Description editor with toolbar ────────────────────────────── */
@@ -1373,6 +1385,7 @@ function DevisPreviewModal({ devis: d, client, onClose }: { devis: Devis; client
 /* ─── Main DevisPage ──────────────────────────────────────────────── */
 export default function DevisPage() {
   const navigate      = useNavigate()
+  const { tenantSlug } = useParams<{ tenantSlug: string }>()
   const { data: devis = [], isLoading } = useDevis()
   const createDevis    = useCreateDevis()
   const deleteDevis    = useDeleteDevis()
@@ -1397,7 +1410,7 @@ export default function DevisPage() {
         notes:         `Généré depuis le devis ${d.numero}`,
       } as any)
       toast.success(`Facture créée depuis ${d.numero}`)
-      navigate('/factures')
+      navigate(`/${tenantSlug}/factures`)
     } catch {
       toast.error('Erreur lors de la conversion')
     }
@@ -1536,7 +1549,7 @@ export default function DevisPage() {
                       <div className="flex items-center gap-1">
                         {/* Always-visible: Aperçu + Modifier */}
                         <button
-                          onClick={() => navigate(`/devis/${d.id}/preview`)}
+                          onClick={() => navigate(`/${tenantSlug}/devis/${d.id}/preview`)}
                           className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-600/10 transition-colors"
                           title="Aperçu & impression"
                         >

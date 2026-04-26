@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -120,6 +120,7 @@ interface HeaderProps {
 export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
   const location  = useLocation()
   const navigate  = useNavigate()
+  const { tenantSlug } = useParams<{ tenantSlug: string }>()
   const { signOut } = useAuth()
   const [alertsOpen, setAlertsOpen] = useState(false)
 
@@ -133,7 +134,7 @@ export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
 
   const handleAlertNav = (link?: string) => {
     setAlertsOpen(false)
-    if (link) navigate(link)
+    if (link) navigate(`/${tenantSlug}${link}`)
   }
 
   const bellColor = criticalCount > 0
@@ -282,7 +283,7 @@ export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
                     <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 text-center">
                       <button
                         className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                        onClick={() => { navigate('/statistiques'); setAlertsOpen(false) }}
+                        onClick={() => { navigate(`/${tenantSlug}/statistiques`); setAlertsOpen(false) }}
                       >
                         Voir toutes les analyses →
                       </button>
@@ -321,7 +322,7 @@ export default function Header({ onMenuToggle, collapsed }: HeaderProps) {
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer gap-2 rounded-lg text-slate-700 dark:text-slate-300"
-              onClick={() => navigate('/parametres')}
+              onClick={() => navigate(`/${tenantSlug}/parametres`)}
             >
               <Settings className="w-4 h-4 text-slate-400" /> Paramètres
             </DropdownMenuItem>

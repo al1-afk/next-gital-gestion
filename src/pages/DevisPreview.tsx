@@ -4,6 +4,7 @@
  */
 import { useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+
 import { ArrowLeft, Loader2, Copy, Check } from 'lucide-react'
 import { useDevis }   from '@/hooks/useDevis'
 import { useClients } from '@/hooks/useClients'
@@ -12,7 +13,7 @@ import DevisTemplate   from '@/components/devis/DevisTemplate'
 import DevisActions    from '@/components/devis/DevisActions'
 
 export default function DevisPreview() {
-  const { id }      = useParams<{ id: string }>()
+  const { id, tenantSlug } = useParams<{ id: string; tenantSlug: string }>()
   const navigate    = useNavigate()
   const templateRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
@@ -42,7 +43,7 @@ export default function DevisPreview() {
   if (!devis) return (
     <div className="flex flex-col items-center justify-center min-h-[100dvh] gap-4">
       <p className="text-muted-foreground">Devis introuvable.</p>
-      <Button variant="secondary" onClick={() => navigate('/devis')}>
+      <Button variant="secondary" onClick={() => navigate(`/${tenantSlug}/devis`)}>
         <ArrowLeft className="w-4 h-4 mr-2" /> Retour aux devis
       </Button>
     </div>
@@ -58,7 +59,7 @@ export default function DevisPreview() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate('/devis')}
+            onClick={() => navigate(`/${tenantSlug}/devis`)}
             className="text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />
