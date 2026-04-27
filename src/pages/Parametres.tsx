@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Settings, User, Bell, Shield, Globe, Save, RefreshCcw, Check, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings, User, Bell, Shield, Globe, Save, RefreshCcw, Check, Eye, EyeOff, Download, Smartphone, CheckCircle2, MonitorSmartphone, Apple } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -75,6 +75,46 @@ export default function Parametres() {
   const [pwLoading, setPwLoading] = useState(false)
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false })
 
+  const [installPrompt, setInstallPrompt] = useState<any>(null)
+  const [appInstalled, setAppInstalled] = useState(false)
+  const isIOS = typeof navigator !== 'undefined'
+    && /iphone|ipad|ipod/i.test(navigator.userAgent)
+    && !(window as any).MSStream
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true
+    if (standalone) setAppInstalled(true)
+
+    const onPrompt = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    }
+    const onInstalled = () => {
+      setAppInstalled(true)
+      setInstallPrompt(null)
+      toast.success('Application installée')
+    }
+    window.addEventListener('beforeinstallprompt', onPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (!installPrompt) return
+    try {
+      installPrompt.prompt()
+      const choice = await installPrompt.userChoice
+      if (choice.outcome === 'accepted') toast.success('Installation lancée')
+      setInstallPrompt(null)
+    } catch {
+      toast.error('Installation impossible')
+    }
+  }
+
   const saveProfile = () => {
     save(LS.fullname, profile.fullname)
     save(LS.role,     profile.role)
@@ -138,6 +178,7 @@ export default function Parametres() {
           <TabsTrigger value="entreprise">Entreprise</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="securite">Sécurité</TabsTrigger>
+          <TabsTrigger value="application">Application</TabsTrigger>
         </TabsList>
 
         {/* ── Profil ── */}
@@ -324,6 +365,69 @@ export default function Parametres() {
               <Save className="w-4 h-4" />
               {pwLoading ? 'Enregistrement…' : 'Mettre à jour le mot de passe'}
             </Button>
+          </div>
+        </TabsContent>
+
+        {/* ── Application ── */}
+        <TabsContent value="application">
+          <div className="card-premium p-6 space-y-5">
+            <h2 className="section-title flex items-center gap-2">
+              <Download className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Installer l'application
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Installez GestiQ sur votre appareil pour y accéder en un clic, même hors ligne, comme une application native.
+            </p>
+
+            {appInstalled ? (
+              <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Application installée</p>
+                  <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Vous utilisez GestiQ en mode application.</p>
+                </div>
+              </div>
+            ) : isIOS ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800/40">
+                  <Apple className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Installation sur iPhone / iPad</p>
+                    <ol className="text-xs text-blue-700/90 dark:text-blue-300/90 space-y-1 list-decimal list-inside">
+                      <li>Ouvrez ce site dans <strong>Safari</strong></li>
+                      <li>Touchez l'icône <strong>Partager</strong> en bas de l'écran</li>
+                      <li>Sélectionnez <strong>« Sur l'écran d'accueil »</strong></li>
+                      <li>Confirmez en touchant <strong>Ajouter</strong></li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+            ) : installPrompt ? (
+              <Button onClick={handleInstall} className="gap-2">
+                <Download className="w-4 h-4" />
+                Installer GestiQ
+              </Button>
+            ) : (
+              <div className="flex items-start gap-3 p-4 bg-muted rounded-lg border border-border">
+                <MonitorSmartphone className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-foreground">Installation manuelle</p>
+                  <p className="text-xs text-muted-foreground">
+                    Votre navigateur n'a pas encore proposé l'installation. Sur Chrome / Edge, cherchez l'icône <Smartphone className="inline w-3.5 h-3.5 mx-0.5" /> dans la barre d'adresse, ou ouvrez le menu et choisissez <strong>« Installer GestiQ »</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-border space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Avantages</p>
+              <ul className="text-xs text-muted-foreground space-y-1.5">
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Lancement en un clic depuis le bureau ou l'écran d'accueil</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Fonctionne sans connexion Internet (données mises en cache)</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Interface plein écran sans barres du navigateur</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Mises à jour automatiques en arrière-plan</li>
+              </ul>
+            </div>
           </div>
         </TabsContent>
       </Tabs>
