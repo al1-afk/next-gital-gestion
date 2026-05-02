@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Trash2, Edit2, Repeat, Sparkles, Calendar as CalendarIcon,
-  Clock, X, Check, ArrowRight, BarChart3, Lightbulb,
+  Clock, X, Check, ArrowRight, BarChart3, Lightbulb, Moon, Bell, BellOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
@@ -53,6 +53,15 @@ const SUGGESTIONS: Array<Omit<RoutineBlock, 'id'>> = [
   { titre: 'Coucher',        type: 'repos',         days: [1, 2, 3, 4, 5, 6, 7], heure: '23:00', duree_min: 30 },
 ]
 
+/* ── Pack: 5 prières islamiques (heures moyennes — Casablanca) ─── */
+const PRAYER_PACK: Array<Omit<RoutineBlock, 'id'>> = [
+  { titre: '🕌 Fajr',    type: 'reflexion', days: [1, 2, 3, 4, 5, 6, 7], heure: '05:30', duree_min: 15, notes: 'Prière de l\'aube — heures moyennes Casablanca, à ajuster selon la saison.' },
+  { titre: '🕌 Dhuhr',   type: 'reflexion', days: [1, 2, 3, 4, 5, 6, 7], heure: '13:00', duree_min: 15 },
+  { titre: '🕌 Asr',     type: 'reflexion', days: [1, 2, 3, 4, 5, 6, 7], heure: '16:30', duree_min: 15 },
+  { titre: '🕌 Maghrib', type: 'reflexion', days: [1, 2, 3, 4, 5, 6, 7], heure: '19:00', duree_min: 15 },
+  { titre: '🕌 Isha',    type: 'reflexion', days: [1, 2, 3, 4, 5, 6, 7], heure: '20:30', duree_min: 15 },
+]
+
 function loadBlocks(): RoutineBlock[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -89,8 +98,30 @@ export function RoutineHebdo({ existingEvents }: { existingEvents: CalEvent[] })
   const [showForm, setShowForm] = useState(false)
   const [editing,  setEditing]  = useState<RoutineBlock | null>(null)
   const [form,     setForm]     = useState<Omit<RoutineBlock, 'id'>>(EMPTY_BLOCK)
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'denied',
+  )
 
   useEffect(() => { saveBlocks(blocks) }, [blocks])
+
+  const requestNotifPermission = async () => {
+    if (typeof Notification === 'undefined') {
+      toast.error('Votre navigateur ne supporte pas les notifications')
+      return
+    }
+    try {
+      const result = await Notification.requestPermission()
+      setNotifPerm(result)
+      if (result === 'granted') {
+        new Notification('GestiQ', { body: 'Les rappels sont activés ✓', icon: '/icon-192.png' })
+        toast.success('Rappels activés')
+      } else if (result === 'denied') {
+        toast.error('Notifications bloquées dans le navigateur')
+      }
+    } catch {
+      toast.error('Erreur lors de la demande')
+    }
+  }
 
   const createMut = useMutation({
     mutationFn: (data: Omit<CalEvent, 'id'>) => calendrierApi.create(data),
@@ -136,6 +167,17 @@ export function RoutineHebdo({ existingEvents }: { existingEvents: CalEvent[] })
     }
     setBlocks(prev => [...prev, { id: uid(), ...s }])
     toast.success(`"${s.titre}" ajouté à votre routine`)
+  }
+
+  const addPrayerPack = () => {
+    const existing = new Set(blocks.map(b => b.titre))
+    const toAdd = PRAYER_PACK.filter(p => !existing.has(p.titre))
+    if (toAdd.length === 0) {
+      toast.info('Les 5 prières sont déjà dans votre routine')
+      return
+    }
+    setBlocks(prev => [...prev, ...toAdd.map(p => ({ id: uid(), ...p }))])
+    toast.success(`${toAdd.length} prière(s) ajoutée(s)`)
   }
 
   const toggleDay = (dayId: number) => {
@@ -207,6 +249,26 @@ export function RoutineHebdo({ existingEvents }: { existingEvents: CalEvent[] })
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant={notifPerm === 'granted' ? 'outline' : 'default'}
+            onClick={requestNotifPermission}
+            disabled={notifPerm === 'denied'}
+            className={cn('gap-1.5', notifPerm === 'granted' && 'text-emerald-600 border-emerald-300 dark:border-emerald-700')}
+            title={notifPerm === 'denied' ? 'Notifications bloquées — activez-les dans les réglages du navigateur' : ''}
+          >
+            {notifPerm === 'granted' ? <Bell className="w-3.5 h-3.5" /> : <BellOff className="w-3.5 h-3.5" />}
+            {notifPerm === 'granted' ? 'Rappels activés' : notifPerm === 'denied' ? 'Bloqués' : 'Activer rappels'}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={addPrayerPack}
+            className="gap-1.5"
+          >
+            <Moon className="w-3.5 h-3.5" />
+            5 prières
+          </Button>
           <Button
             size="sm"
             variant="outline"
