@@ -48,12 +48,14 @@ app.use(helmet({
 app.set('trust proxy', 1)
 app.use(cookieParser())
 
-/* ── CORS — strict origin list (localhost:* allowed in dev) ─── */
+/* ── CORS — strict origin list (localhost:* in dev, *.nextgital.tech in prod) ─── */
 const LOCALHOST_DEV_RE = /^http:\/\/localhost:\d+$/
+const NEXTGITAL_RE     = /^https:\/\/[a-z0-9-]+\.nextgital\.tech$/i
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true)
     if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
+    if (NEXTGITAL_RE.test(origin)) return cb(null, true)
     if (!isProd && LOCALHOST_DEV_RE.test(origin)) return cb(null, true)
     cb(new Error(`CORS: origin ${origin} non autorisée`))
   },
