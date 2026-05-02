@@ -6,7 +6,7 @@ import {
   CreditCard, DollarSign, TrendingUp, Globe, Server, Package, ShoppingCart,
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
-  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car,
+  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
@@ -29,6 +29,7 @@ export const ALL_MODULES: { key: string; label: string }[] = [
   { key: 'clients',           label: 'Clients' },
   { key: 'taches',            label: 'Tâches' },
   { key: 'calendrier',        label: 'Calendrier' },
+  { key: 'planificateur',     label: 'Planificateur' },
   { key: 'devis',             label: 'Devis' },
   { key: 'factures',          label: 'Factures' },
   { key: 'contrats',          label: 'Contrats' },
@@ -63,6 +64,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Clients',         href: '/clients',   icon: Users, module: 'clients' },
       { label: 'Tâches',          href: '/taches',    icon: CheckSquare, module: 'taches' },
       { label: 'Calendrier',      href: '/calendrier',icon: CalendarDays, module: 'calendrier' },
+      { label: 'Planificateur',   href: '/planificateur', icon: Target, badge: 'New', module: 'planificateur' },
     ],
   },
   {

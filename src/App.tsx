@@ -37,6 +37,7 @@ const ActivityLogs   = lazy(() => import('@/pages/ActivityLogs'))
 const ConseillerIA   = lazy(() => import('@/pages/ConseillerIA'))
 const Taches         = lazy(() => import('@/pages/Taches'))
 const Calendrier     = lazy(() => import('@/pages/Calendrier'))
+const Planificateur  = lazy(() => import('@/pages/Planificateur'))
 const Parametres       = lazy(() => import('@/pages/Parametres'))
 const Automatisations     = lazy(() => import('@/pages/Automatisations'))
 const AbonnementsClients  = lazy(() => import('@/pages/AbonnementsClients'))
@@ -82,6 +83,7 @@ export default function App() {
               <Route path="clients/:id"                element={<ClientDetail />} />
               <Route path="taches"                     element={<Taches />} />
               <Route path="calendrier"                 element={<Calendrier />} />
+              <Route path="planificateur"              element={<Planificateur />} />
               <Route path="devis"                      element={<Devis />} />
               <Route path="devis/:id/preview"          element={<DevisPreview />} />
               {/* Backwards-compat: old shared links missing the /devis/ segment */}
