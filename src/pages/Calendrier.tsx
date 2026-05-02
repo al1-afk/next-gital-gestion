@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronLeft, ChevronRight, CalendarDays, Plus, Clock, User,
   Trash2, Edit2, Tag, X, Check, LayoutGrid, Rows3, AlignJustify,
-  Download, ExternalLink, RefreshCw, Link2,
+  Download, ExternalLink, RefreshCw, Link2, Repeat,
 } from 'lucide-react'
+import { RoutineHebdo } from '@/components/RoutineHebdo'
 import { Button }   from '@/components/ui/button'
 import { Input }    from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -16,11 +17,13 @@ import { toast }    from 'sonner'
 import { calendrierApi } from '@/lib/api'
 
 /* ─── Types ───────────────────────────────────────────────────────── */
-type EventType = 'rdv' | 'demo' | 'appel' | 'interne' | 'echeance' | 'relance' | 'autre'
-type ViewMode  = 'month' | 'week' | 'day'
+export type EventType =
+  | 'rdv' | 'demo' | 'appel' | 'interne' | 'echeance' | 'relance' | 'autre'
+  | 'sport' | 'repos' | 'apprentissage' | 'repas' | 'voyage' | 'reflexion' | 'famille' | 'routine'
+type ViewMode  = 'month' | 'week' | 'day' | 'routine'
 type TypeFilter = EventType | 'all'
 
-interface CalEvent {
+export interface CalEvent {
   id:     string
   titre:  string
   date:   string   // YYYY-MM-DD
@@ -31,14 +34,23 @@ interface CalEvent {
   done:   boolean
 }
 
-const TYPE_CONFIG: Record<EventType, { label: string; color: string; dot: string; bg: string }> = {
-  rdv:      { label: 'RDV client',      dot: 'bg-blue-500',    bg: 'bg-blue-500',    color: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30'         },
-  demo:     { label: 'Démo',            dot: 'bg-purple-500',  bg: 'bg-purple-500',  color: 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30' },
-  appel:    { label: 'Appel',           dot: 'bg-emerald-500', bg: 'bg-emerald-500', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' },
-  interne:  { label: 'Réunion interne', dot: 'bg-slate-500',   bg: 'bg-slate-500',   color: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/30'     },
-  echeance: { label: 'Échéance',        dot: 'bg-red-500',     bg: 'bg-red-500',     color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30'                 },
-  relance:  { label: 'Relance',         dot: 'bg-amber-500',   bg: 'bg-amber-500',   color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'     },
-  autre:    { label: 'Autre',           dot: 'bg-cyan-500',    bg: 'bg-cyan-500',    color: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/30'           },
+export const TYPE_CONFIG: Record<EventType, { label: string; emoji: string; color: string; dot: string; bg: string }> = {
+  rdv:           { label: 'RDV client',      emoji: '🤝', dot: 'bg-blue-500',    bg: 'bg-blue-500',    color: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/30'         },
+  demo:          { label: 'Démo',            emoji: '🎬', dot: 'bg-purple-500',  bg: 'bg-purple-500',  color: 'bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-500/20 dark:text-purple-300 dark:border-purple-500/30' },
+  appel:         { label: 'Appel',           emoji: '📞', dot: 'bg-emerald-500', bg: 'bg-emerald-500', color: 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' },
+  interne:       { label: 'Réunion interne', emoji: '👥', dot: 'bg-slate-500',   bg: 'bg-slate-500',   color: 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-500/20 dark:text-slate-300 dark:border-slate-500/30'     },
+  echeance:      { label: 'Échéance',        emoji: '⏰', dot: 'bg-red-500',     bg: 'bg-red-500',     color: 'bg-red-100 text-red-700 border-red-300 dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/30'                 },
+  relance:       { label: 'Relance',         emoji: '🔁', dot: 'bg-amber-500',   bg: 'bg-amber-500',   color: 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'     },
+  autre:         { label: 'Autre',           emoji: '📌', dot: 'bg-cyan-500',    bg: 'bg-cyan-500',    color: 'bg-cyan-100 text-cyan-700 border-cyan-300 dark:bg-cyan-500/20 dark:text-cyan-300 dark:border-cyan-500/30'           },
+  // ── Life / wellbeing categories ───────────────────────────
+  sport:         { label: 'Sport',           emoji: '🏃', dot: 'bg-green-500',   bg: 'bg-green-500',   color: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-500/20 dark:text-green-300 dark:border-green-500/30'     },
+  repos:         { label: 'Repos / Hygiène', emoji: '🛁', dot: 'bg-sky-400',     bg: 'bg-sky-400',     color: 'bg-sky-100 text-sky-700 border-sky-300 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/30'                 },
+  apprentissage: { label: 'Apprentissage',   emoji: '📚', dot: 'bg-indigo-500',  bg: 'bg-indigo-500',  color: 'bg-indigo-100 text-indigo-700 border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30' },
+  repas:         { label: 'Repas',           emoji: '🍽️', dot: 'bg-orange-500',  bg: 'bg-orange-500',  color: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-500/20 dark:text-orange-300 dark:border-orange-500/30' },
+  voyage:        { label: 'Voyage',          emoji: '✈️', dot: 'bg-teal-500',    bg: 'bg-teal-500',    color: 'bg-teal-100 text-teal-700 border-teal-300 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30'             },
+  reflexion:     { label: 'Réflexion',       emoji: '🧘', dot: 'bg-pink-500',    bg: 'bg-pink-500',    color: 'bg-pink-100 text-pink-700 border-pink-300 dark:bg-pink-500/20 dark:text-pink-300 dark:border-pink-500/30'             },
+  famille:       { label: 'Famille',         emoji: '👨‍👩‍👧', dot: 'bg-rose-500', bg: 'bg-rose-500', color: 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'             },
+  routine:       { label: 'Routine',         emoji: '🔄', dot: 'bg-violet-500',  bg: 'bg-violet-500',  color: 'bg-violet-100 text-violet-700 border-violet-300 dark:bg-violet-500/20 dark:text-violet-300 dark:border-violet-500/30' },
 }
 
 const DAYS_FR   = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
@@ -582,32 +594,43 @@ export default function Calendrier() {
           {/* View toggle */}
           <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl gap-0.5">
             {([
-              { id: 'month', icon: LayoutGrid,   label: 'Mois'     },
-              { id: 'week',  icon: Rows3,         label: 'Semaine'  },
-              { id: 'day',   icon: AlignJustify,  label: 'Jour'     },
-            ] as const).map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => setView(id)}
-                title={label}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
-                  view === id
-                    ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
-                )}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{label}</span>
-              </button>
-            ))}
+              { id: 'month',   icon: LayoutGrid,    label: 'Mois'    },
+              { id: 'week',    icon: Rows3,         label: 'Semaine' },
+              { id: 'day',     icon: AlignJustify,  label: 'Jour'    },
+              { id: 'routine', icon: Repeat,        label: 'Routine' },
+            ] as const).map(({ id, icon: Icon, label }) => {
+              const isRoutine = id === 'routine'
+              return (
+                <button
+                  key={id}
+                  onClick={() => setView(id)}
+                  title={label}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                    view === id
+                      ? isRoutine
+                        ? 'bg-white dark:bg-slate-700 text-violet-600 dark:text-violet-400 shadow-sm'
+                        : 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{label}</span>
+                </button>
+              )
+            })}
           </div>
-          <Button size="sm" onClick={() => { setEditing(undefined); setShowForm(true) }}>
-            <Plus className="w-4 h-4" /> Nouvel événement
-          </Button>
+          {view !== 'routine' && (
+            <Button size="sm" onClick={() => { setEditing(undefined); setShowForm(true) }}>
+              <Plus className="w-4 h-4" /> Nouvel événement
+            </Button>
+          )}
         </div>
       </div>
 
+      {view === 'routine' && <RoutineHebdo existingEvents={events} />}
+
+      {view !== 'routine' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
         {/* ── Main calendar area ── */}
@@ -932,6 +955,7 @@ export default function Calendrier() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Event Popover ── */}
       <AnimatePresence>
