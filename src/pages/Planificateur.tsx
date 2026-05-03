@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -6,6 +6,7 @@ import {
   Trophy, Zap, ListChecks, Sparkles, Calendar as CalendarIcon,
   ChevronLeft, ChevronRight, ArrowRight, Save, BookmarkPlus,
   CheckCircle2, MinusCircle, RotateCw, Flame, X, Bell, BellOff, Download, ExternalLink,
+  AlertTriangle, Lightbulb,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
@@ -122,6 +123,30 @@ const CAT_LIST: { key: CategoryKey; label: string }[] = [
   { key: 'work',     label: 'Travail (autre)'     },
   { key: 'free',     label: 'Libre'               },
 ]
+
+/* Variety suggestions per category — shown when an activity repeats too often. */
+const VARIETY_SUGGESTIONS: Partial<Record<CategoryKey, string[]>> = {
+  sport:    ['Yoga', 'Natation', 'Vélo', 'Course à pied', 'Boxe', 'HIIT', 'Étirements', 'Pilates'],
+  outdoor:  ['Randonnée', 'Photographie', 'Jardinage', 'Marche en forêt', 'Vélo en plein air', 'Course en parc'],
+  learning: ['Podcast', 'Documentaire', 'Atelier pratique', 'Conférence en ligne', 'Mentor / coach', 'Étude de cas'],
+  rest:     ['Sauna', 'Massage', 'Bain chaud', 'Sieste réparatrice', 'Aromathérapie', 'Marche silencieuse'],
+  family:   ['Sortie au parc', 'Cuisine ensemble', 'Jeu de société', 'Visite musée', 'Promenade vélo'],
+  evening:  ['Lecture papier', 'Journal écrit', 'Jeux en famille', 'Films classiques', 'Soirée musique'],
+  closing:  ['Démo live', 'Webinar', 'Étude de cas client', 'Témoignages', 'Workshop offre'],
+  comms:    ['Email personnalisé', 'DM LinkedIn', 'Voix WhatsApp', 'Vidéo personnalisée', 'Suivi qualifié'],
+  leads:    ['Cold email', 'Cold call', 'LinkedIn outbound', 'Article SEO', 'YouTube short', 'Partenariat'],
+  service:  ['Welcome call', 'Check-in trimestriel', 'Cas client', 'NPS feedback', 'Programme fidélité'],
+  team:     ['1-on-1', 'Stand-up', 'Rétrospective', 'Brainstorm', 'Workshop process'],
+  review:   ['Revue par rôle', 'Bilan visuel', 'Audit chiffré', 'Feedback équipe', 'Tableau de bord'],
+  goals:    ['Mind mapping', 'Vision board', 'Lecture stratégique', 'Walk & think', 'Quarterly OKR'],
+  nature:   ['Plage', 'Forêt', 'Montagne', 'Lac', 'Parc botanique', 'Jardin public'],
+  wakeup:   ['Méditation 10min', 'Étirements doux', 'Respiration 4-7-8', 'Cold shower', 'Marche matinale'],
+  lunch:    ['Repas dehors', 'Cuisine maison', 'Salade fraîche', 'Repas avec un proche'],
+  work:     ['Deep work 90min', 'Pomodoro 4×25', 'Atelier créatif', 'Audit processus'],
+}
+
+/** Activity is "repetitive" when its title appears in this many days or more. */
+const REPETITION_THRESHOLD = 5
 
 /* Map categories to in-app routes (relative to tenant slug). */
 const CAT_LINKS: Partial<Record<CategoryKey, { path: string; label: string }>> = {
@@ -587,6 +612,31 @@ export default function Planificateur() {
     }
   }, [prospects, factures, weekKey, week.callsManual])
 
+  /* ─── Repetition detection (warns when same activity ≥ N days) ─── */
+  const monotony = useMemo(() => {
+    type Entry = {
+      title:    string
+      emoji:    string
+      category: CategoryKey
+      days:     number[]
+    }
+    const map = new Map<string, Entry>()
+    data.days.forEach((day, di) => {
+      const seenInDay = new Set<string>()
+      day.blocks.forEach(b => {
+        const key = b.title.trim().toLowerCase()
+        if (!key || seenInDay.has(key)) return
+        seenInDay.add(key)
+        const cur = map.get(key)
+        if (cur) cur.days.push(di)
+        else map.set(key, { title: b.title.trim(), emoji: b.emoji, category: b.category, days: [di] })
+      })
+    })
+    return Array.from(map.values())
+      .filter(e => e.days.length >= REPETITION_THRESHOLD)
+      .sort((a, b) => b.days.length - a.days.length)
+  }, [data.days])
+
   /* ─── Goal computations ─── */
   const computed = useMemo(() => {
     const perMonth      = Math.round(data.goal.revenue / data.goal.months)
@@ -617,6 +667,37 @@ export default function Planificateur() {
       return { ...d, days }
     })
     setEditing({ dayIdx, blockIdx: data.days[dayIdx].blocks.length })
+  }
+
+  /** Create a new block with a specific time range and open the editor. */
+  const addBlockAt = (dayIdx: number, startMin: number, endMin: number) => {
+    const newBlockIdx = data.days[dayIdx].blocks.length
+    setData(d => {
+      const days = d.days.map((day, di) => {
+        if (di !== dayIdx) return day
+        const newBlock: Block = {
+          time: formatTimeRange(startMin, endMin),
+          emoji: '✨', title: 'Nouvelle activité', subtitle: '', category: 'free',
+        }
+        return { ...day, blocks: [...day.blocks, newBlock] }
+      })
+      return { ...d, days }
+    })
+    setEditing({ dayIdx, blockIdx: newBlockIdx })
+  }
+
+  /** Update only the time of a block (used by drag/resize). */
+  const setBlockTime = (dayIdx: number, blockIdx: number, startMin: number, endMin: number) => {
+    setData(d => {
+      const days = d.days.map((day, di) => {
+        if (di !== dayIdx) return day
+        const blocks = day.blocks.map((b, bi) =>
+          bi === blockIdx ? { ...b, time: formatTimeRange(startMin, endMin) } : b
+        )
+        return { ...day, blocks }
+      })
+      return { ...d, days }
+    })
   }
 
   const deleteBlock = (dayIdx: number, blockIdx: number) => {
@@ -857,6 +938,9 @@ export default function Planificateur() {
         </div>
       </div>
 
+      {/* ── Time distribution ── */}
+      <TimeDistribution data={data} />
+
       {/* ── Weekly calendar grid ── */}
       <WeeklyCalendar
         data={data}
@@ -867,8 +951,22 @@ export default function Planificateur() {
         onCycleStatus={cycleBlockStatus}
         onEdit={(di, bi) => setEditing({ dayIdx: di, blockIdx: bi })}
         onAdd={addBlock}
+        onAddAt={addBlockAt}
+        onMoveResize={setBlockTime}
         onNavigate={(path) => navigate(path)}
       />
+
+      {/* ── Monotony warning ── */}
+      <RepetitionWarning monotony={monotony} />
+
+      {/* ── Weekly review ── */}
+      <WeeklyReview
+        data={data}
+        weekStatus={week.blockStatus}
+        kpiActual={kpiActual}
+        isCurrentWeek={isCurrentWeek}
+      />
+
 
       {/* ── KPIs · Habits · Rules ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -1157,11 +1255,273 @@ export default function Planificateur() {
 
 /* ─── Sub-components ────────────────────────────────────────── */
 
+function TimeDistribution({ data }: { data: PlannerData }) {
+  const stats = useMemo(() => {
+    const minutesByCat = new Map<CategoryKey, number>()
+    let total = 0
+    data.days.forEach(day => {
+      day.blocks.forEach(b => {
+        const r = parseTimeRange(b.time)
+        if (!r) return
+        const dur = r.end - r.start
+        if (dur <= 0) return
+        minutesByCat.set(b.category, (minutesByCat.get(b.category) ?? 0) + dur)
+        total += dur
+      })
+    })
+    if (total === 0) return { entries: [] as Array<{ key: CategoryKey; minutes: number; pct: number }>, total: 0 }
+    const entries = Array.from(minutesByCat.entries())
+      .map(([key, minutes]) => ({ key, minutes, pct: minutes / total }))
+      .sort((a, b) => b.minutes - a.minutes)
+    return { entries, total }
+  }, [data.days])
+
+  if (stats.entries.length === 0) return null
+
+  const totalH = Math.round(stats.total / 60 * 10) / 10
+  /* Build SVG donut */
+  const R = 36
+  const C = 2 * Math.PI * R
+  let acc = 0
+
+  return (
+    <div className="card-premium p-4 flex items-center gap-5 flex-wrap">
+      <div className="relative flex-shrink-0">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r={R} fill="none" stroke="currentColor" strokeOpacity={0.08} strokeWidth="14" />
+          {stats.entries.map(e => {
+            const len = e.pct * C
+            const offset = -acc * C
+            acc += e.pct
+            const cfg = CAT[e.key] ?? CAT.free
+            const colorClass = cfg.dot.replace('bg-', 'text-')
+            return (
+              <circle
+                key={e.key}
+                cx="50" cy="50" r={R}
+                fill="none"
+                strokeWidth="14"
+                stroke="currentColor"
+                strokeDasharray={`${len} ${C}`}
+                strokeDashoffset={offset}
+                transform="rotate(-90 50 50)"
+                className={colorClass}
+              />
+            )
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold text-foreground tabular-nums">{totalH}h</span>
+          <span className="text-[9px] uppercase tracking-wider text-muted-foreground">/ semaine</span>
+        </div>
+      </div>
+
+      <div className="flex-1 min-w-[200px]">
+        <h3 className="section-title flex items-center gap-2 mb-2">
+          <TrendingUp className="w-4 h-4 text-blue-500" />
+          Répartition du temps
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-1">
+          {stats.entries.map(e => {
+            const cfg = CAT[e.key] ?? CAT.free
+            const label = CAT_LIST.find(c => c.key === e.key)?.label ?? e.key
+            const h = Math.floor(e.minutes / 60)
+            const m = e.minutes % 60
+            return (
+              <div key={e.key} className="flex items-center gap-1.5 text-[11px]">
+                <span className={cn('w-2 h-2 rounded-full flex-shrink-0', cfg.dot)} />
+                <span className="text-muted-foreground truncate flex-1">{label}</span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {h > 0 ? `${h}h${m ? String(m).padStart(2,'0') : ''}` : `${m}min`}
+                </span>
+                <span className="text-muted-foreground tabular-nums w-8 text-right">{Math.round(e.pct * 100)}%</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WeeklyReview({ data, weekStatus, kpiActual, isCurrentWeek }: {
+  data:          PlannerData
+  weekStatus:    Record<string, BlockStatus>
+  kpiActual:     { leads: number; calls: number; closings: number; revenue: number }
+  isCurrentWeek: boolean
+}) {
+  const review = useMemo(() => {
+    let total = 0, done = 0, skip = 0, postpone = 0
+    const doneByCat = new Map<CategoryKey, number>()
+    data.days.forEach((day, di) => {
+      day.blocks.forEach((b, bi) => {
+        total++
+        const s = weekStatus[`${di}_${bi}`]
+        if (s === 'done')     { done++; doneByCat.set(b.category, (doneByCat.get(b.category) ?? 0) + 1) }
+        if (s === 'skip')     skip++
+        if (s === 'postpone') postpone++
+      })
+    })
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0
+    let topCat: CategoryKey | null = null
+    let topN = 0
+    doneByCat.forEach((n, k) => { if (n > topN) { topN = n; topCat = k } })
+    return { total, done, skip, postpone, pct, topCat, topN }
+  }, [data.days, weekStatus])
+
+  const grade =
+    review.pct >= 90 ? { label: 'Excellent',  color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500' } :
+    review.pct >= 70 ? { label: 'Très bien',  color: 'text-blue-600 dark:text-blue-400',       bg: 'bg-blue-500'    } :
+    review.pct >= 50 ? { label: 'Correct',    color: 'text-amber-600 dark:text-amber-400',     bg: 'bg-amber-500'   } :
+    review.pct >= 25 ? { label: 'À améliorer', color: 'text-orange-600 dark:text-orange-400',  bg: 'bg-orange-500'  } :
+                       { label: 'Difficile',  color: 'text-rose-600 dark:text-rose-400',       bg: 'bg-rose-500'    }
+
+  if (review.total === 0) return null
+  const topCatLabel = review.topCat ? (CAT_LIST.find(c => c.key === review.topCat)?.label ?? review.topCat) : '—'
+
+  return (
+    <div className="card-premium p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Trophy className="w-4 h-4 text-violet-500" />
+        <h3 className="text-base font-bold text-foreground">Bilan de la semaine</h3>
+        {isCurrentWeek && (
+          <span className="ml-auto text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">En cours</span>
+        )}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Note</p>
+          <p className={cn('text-lg font-bold mt-0.5', grade.color)}>{grade.label}</p>
+          <div className="h-1 rounded-full bg-muted mt-2 overflow-hidden">
+            <div className={cn('h-full transition-all', grade.bg)} style={{ width: `${review.pct}%` }} />
+          </div>
+          <p className="text-[10px] text-muted-foreground tabular-nums mt-1">{review.pct}% accomplis</p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Terminés</p>
+          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tabular-nums">{review.done}<span className="text-xs text-muted-foreground"> / {review.total}</span></p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Reportés</p>
+          <p className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-0.5 tabular-nums">{review.postpone}</p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Sautés</p>
+          <p className="text-lg font-bold text-slate-500 mt-0.5 tabular-nums">{review.skip}</p>
+        </div>
+        <div className="rounded-xl border border-border p-3">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Top catégorie</p>
+          <p className="text-sm font-bold text-foreground mt-0.5 truncate">{topCatLabel}</p>
+          <p className="text-[10px] text-muted-foreground">{review.topN} fois</p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+          <span className="text-muted-foreground">Leads</span>
+          <span className="font-semibold tabular-nums">{kpiActual.leads}</span>
+        </div>
+        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+          <span className="text-muted-foreground">Appels</span>
+          <span className="font-semibold tabular-nums">{kpiActual.calls}</span>
+        </div>
+        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+          <span className="text-muted-foreground">Closings</span>
+          <span className="font-semibold tabular-nums">{kpiActual.closings}</span>
+        </div>
+        <div className="flex items-center justify-between p-2 rounded-lg bg-muted/40">
+          <span className="text-muted-foreground">Revenus</span>
+          <span className="font-semibold tabular-nums">{kpiActual.revenue.toLocaleString('fr-FR')} $</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RepetitionWarning({ monotony }: {
+  monotony: Array<{ title: string; emoji: string; category: CategoryKey; days: number[] }>
+}) {
+  const [open, setOpen] = useState(true)
+  if (monotony.length === 0) return null
+
+  return (
+    <div className="rounded-2xl border-2 border-rose-300 dark:border-rose-700 bg-gradient-to-br from-rose-50 to-amber-50 dark:from-rose-500/10 dark:to-amber-500/5 overflow-hidden shadow-sm">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-3 p-4 text-left hover:bg-rose-100/40 dark:hover:bg-rose-500/10 transition"
+      >
+        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-rose-500 text-white flex items-center justify-center shadow animate-pulse">
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm md:text-base font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2 flex-wrap">
+            Attention — routine trop répétitive
+            <span className="px-2 py-0.5 text-[11px] rounded-full bg-rose-500 text-white font-bold">
+              {monotony.length} activité{monotony.length > 1 ? 's' : ''}
+            </span>
+          </h3>
+          <p className="text-xs md:text-sm text-rose-600/80 dark:text-rose-400/80 mt-0.5">
+            Ces activités reviennent presque chaque jour. Variez pour éviter la lassitude et stimuler votre énergie.
+          </p>
+        </div>
+        <ChevronRight className={cn('w-4 h-4 text-rose-500 flex-shrink-0 transition-transform', open && 'rotate-90')} />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-2.5 border-t border-rose-200 dark:border-rose-800">
+          {monotony.map(m => {
+            const ideas = VARIETY_SUGGESTIONS[m.category] ?? []
+            const cfg   = CAT[m.category] ?? CAT.free
+            return (
+              <div
+                key={m.title.toLowerCase()}
+                className={cn(
+                  'rounded-lg p-3 border',
+                  cfg.bg, cfg.ring,
+                )}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className={cn('text-sm font-semibold', cfg.color)}>
+                    <span className="mr-1.5">{m.emoji}</span>
+                    {m.title}
+                  </p>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-rose-500 text-white font-bold tabular-nums">
+                    {m.days.length}× / semaine
+                  </span>
+                </div>
+                {ideas.length > 0 && (
+                  <div className="mt-2 flex items-start gap-1.5 flex-wrap">
+                    <span className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-300 font-semibold">
+                      <Lightbulb className="w-3 h-3" />
+                      Variations:
+                    </span>
+                    {ideas.map(s => (
+                      <span
+                        key={s}
+                        className="text-[11px] px-2 py-0.5 rounded-full bg-white/70 dark:bg-card text-foreground border border-border"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <p className="text-[11px] text-muted-foreground italic pt-1">
+            Conseil : remplacez 1 ou 2 occurrences par semaine pour casser la monotonie sans perdre l'effet d'habitude.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const HOUR_PX = 56
+const SNAP_MIN = 15  // snap-to-grid for drag/click-to-create
 
 function WeeklyCalendar({
   data, weekKey, todayIdx, nowMin,
-  statusFor, onCycleStatus, onEdit, onAdd, onNavigate,
+  statusFor, onCycleStatus, onEdit, onAdd, onAddAt, onMoveResize, onNavigate,
 }: {
   data:          PlannerData
   weekKey:       string
@@ -1171,6 +1531,8 @@ function WeeklyCalendar({
   onCycleStatus: (dayIdx: number, blockIdx: number) => void
   onEdit:        (dayIdx: number, blockIdx: number) => void
   onAdd:         (dayIdx: number) => void
+  onAddAt:       (dayIdx: number, startMin: number, endMin: number) => void
+  onMoveResize:  (dayIdx: number, blockIdx: number, startMin: number, endMin: number) => void
   onNavigate:    (path: string) => void
 }) {
   /* compute hour bounds from data, fallback 6h–23h */
@@ -1194,6 +1556,113 @@ function WeeklyCalendar({
     j.setDate(j.getDate() - mondayIdx(j))
     return new Date(j.getTime() + (w - 1) * 7 * 86400000)
   }, [weekKey])
+
+  /* ─── Conflict detection: find overlapping blocks per day ─── */
+  const conflicts = useMemo(() => {
+    const map: Record<number, Set<number>> = {}
+    data.days.forEach((day, di) => {
+      const set = new Set<number>()
+      const items = day.blocks
+        .map((b, bi) => ({ bi, range: parseTimeRange(b.time) }))
+        .filter(x => x.range) as { bi: number; range: { start: number; end: number } }[]
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          if (items[i].range.start < items[j].range.end &&
+              items[j].range.start < items[i].range.end) {
+            set.add(items[i].bi)
+            set.add(items[j].bi)
+          }
+        }
+      }
+      if (set.size > 0) map[di] = set
+    })
+    return map
+  }, [data.days])
+
+  /* ─── Drag state (move or resize) ─── */
+  type DragMode = 'move' | 'resize'
+  type DragState = {
+    dayIdx:    number
+    blockIdx:  number
+    mode:      DragMode
+    initialY:  number
+    startMin:  number
+    endMin:    number
+    previewStart: number
+    previewEnd:   number
+  }
+  const [drag, setDrag] = useState<DragState | null>(null)
+  const movedRef = useRef(false)
+
+  /* Convert a y-pixel within a column to minutes-of-day, snapped. */
+  const yToMin = (y: number, columnHeight: number) => {
+    const totalMin = (maxHour - minHour) * 60
+    const min = minHour * 60 + (y / columnHeight) * totalMin
+    return Math.max(minHour * 60, Math.min(maxHour * 60, Math.round(min / SNAP_MIN) * SNAP_MIN))
+  }
+
+  const beginDrag = (
+    e: React.PointerEvent,
+    dayIdx: number,
+    blockIdx: number,
+    mode: DragMode,
+    range: { start: number; end: number },
+  ) => {
+    e.stopPropagation()
+    e.preventDefault()
+    movedRef.current = false
+    ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+    setDrag({
+      dayIdx, blockIdx, mode,
+      initialY:     e.clientY,
+      startMin:     range.start,
+      endMin:       range.end,
+      previewStart: range.start,
+      previewEnd:   range.end,
+    })
+  }
+
+  useEffect(() => {
+    if (!drag) return
+    const onMove = (e: PointerEvent) => {
+      const dy = e.clientY - drag.initialY
+      const deltaMin = Math.round((dy / HOUR_PX) * 60 / SNAP_MIN) * SNAP_MIN
+      if (deltaMin !== 0) movedRef.current = true
+      let ps = drag.startMin, pe = drag.endMin
+      if (drag.mode === 'move') {
+        const dur = drag.endMin - drag.startMin
+        ps = Math.max(minHour * 60, Math.min(maxHour * 60 - dur, drag.startMin + deltaMin))
+        pe = ps + dur
+      } else {
+        pe = Math.max(drag.startMin + SNAP_MIN, Math.min(maxHour * 60, drag.endMin + deltaMin))
+      }
+      setDrag(d => d && { ...d, previewStart: ps, previewEnd: pe })
+    }
+    const onUp = () => {
+      if (movedRef.current && (drag.previewStart !== drag.startMin || drag.previewEnd !== drag.endMin)) {
+        onMoveResize(drag.dayIdx, drag.blockIdx, drag.previewStart, drag.previewEnd)
+      }
+      setDrag(null)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [drag, minHour, maxHour, onMoveResize])
+
+  /* Click on empty area of a column → create a 60-min block at that time. */
+  const onColumnClick = (e: React.MouseEvent, dayIdx: number) => {
+    if (e.target !== e.currentTarget) return
+    if (movedRef.current) { movedRef.current = false; return }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const startMin = yToMin(e.clientY - rect.top, rect.height)
+    const endMin   = Math.min(maxHour * 60, startMin + 60)
+    onAddAt(dayIdx, startMin, endMin)
+  }
 
   return (
     <div className="card-premium overflow-hidden">
@@ -1271,12 +1740,14 @@ function WeeklyCalendar({
 
         {/* Day columns */}
         {data.days.map((day, di) => {
-          const isToday = di === todayIdx
+          const isToday   = di === todayIdx
+          const conflictSet = conflicts[di]
           return (
             <div
               key={di}
+              onClick={(e) => onColumnClick(e, di)}
               className={cn(
-                'relative border-l border-border',
+                'relative border-l border-border cursor-cell',
                 day.weekend && 'bg-amber-50/20 dark:bg-amber-500/[0.03]',
                 isToday && 'bg-blue-50/20 dark:bg-blue-500/[0.04]',
               )}
@@ -1286,7 +1757,7 @@ function WeeklyCalendar({
               {hours.slice(0, -1).map((_, i) => (
                 <div
                   key={i}
-                  className="absolute left-0 right-0 border-t border-border/40"
+                  className="absolute left-0 right-0 border-t border-border/40 pointer-events-none"
                   style={{ top: (i + 1) * HOUR_PX }}
                 />
               ))}
@@ -1307,18 +1778,23 @@ function WeeklyCalendar({
                 {day.blocks.map((b, bi) => {
                   const range = parseTimeRange(b.time)
                   if (!range) return null
-                  const cfg    = CAT[b.category] ?? CAT.free
-                  const status = statusFor(di, bi)
-                  const isLive = isToday && nowMin >= range.start && nowMin < range.end
-                  const isPast = isToday && nowMin >= range.end
-                  const link   = CAT_LINKS[b.category]
-                  const top    = ((range.start - minHour * 60) / 60) * HOUR_PX
-                  const height = Math.max(28, ((range.end - range.start) / 60) * HOUR_PX) - 2
+                  const cfg     = CAT[b.category] ?? CAT.free
+                  const status  = statusFor(di, bi)
+                  const isLive  = isToday && nowMin >= range.start && nowMin < range.end
+                  const isPast  = isToday && nowMin >= range.end
+                  const link    = CAT_LINKS[b.category]
+                  const isDragging = drag?.dayIdx === di && drag.blockIdx === bi
+                  const eff     = isDragging
+                    ? { start: drag!.previewStart, end: drag!.previewEnd }
+                    : range
+                  const top     = ((eff.start - minHour * 60) / 60) * HOUR_PX
+                  const height  = Math.max(28, ((eff.end - eff.start) / 60) * HOUR_PX) - 2
+                  const inConflict = conflictSet?.has(bi) ?? false
 
                   return (
                     <motion.div
                       key={bi}
-                      layout
+                      layout={!isDragging}
                       initial={{ opacity: 0, scale: 0.97 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
@@ -1326,6 +1802,8 @@ function WeeklyCalendar({
                         'group absolute left-0.5 right-0.5 rounded-md border overflow-hidden transition',
                         cfg.bg, cfg.ring,
                         isLive    && 'ring-2 ring-emerald-500 dark:ring-emerald-400 shadow-md z-10',
+                        inConflict && 'ring-2 ring-rose-500 ring-dashed',
+                        isDragging && 'opacity-90 shadow-xl z-30 scale-[1.02]',
                         status === 'done'     && 'opacity-60',
                         status === 'skip'     && 'opacity-40 line-through',
                         status === 'postpone' && 'opacity-70',
@@ -1333,11 +1811,17 @@ function WeeklyCalendar({
                       )}
                       style={{ top, height }}
                     >
-                      <button
-                        onClick={() => onEdit(di, bi)}
-                        className="w-full h-full text-left p-1.5 pr-5"
+                      {/* Drag-to-move zone (whole top area) */}
+                      <div
+                        onPointerDown={(e) => beginDrag(e, di, bi, 'move', range)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!movedRef.current) onEdit(di, bi)
+                        }}
+                        className="w-full h-full p-1.5 pr-5 cursor-grab active:cursor-grabbing select-none"
+                        style={{ touchAction: 'none' }}
                       >
-                        <div className="flex items-start gap-1">
+                        <div className="flex items-start gap-1 pointer-events-none">
                           <span className="text-[12px] leading-none flex-shrink-0 mt-0.5">{b.emoji}</span>
                           <div className="min-w-0 flex-1">
                             <p className={cn('text-[11px] font-semibold leading-tight truncate', cfg.color)}>
@@ -1349,17 +1833,30 @@ function WeeklyCalendar({
                               </p>
                             )}
                             {height > 38 && (
-                              <p className="text-[9px] opacity-60 mt-0.5 truncate">{b.time}</p>
+                              <p className="text-[9px] opacity-60 mt-0.5 truncate">
+                                {isDragging
+                                  ? formatTimeRange(eff.start, eff.end)
+                                  : b.time}
+                              </p>
                             )}
                           </div>
                         </div>
-                      </button>
+                      </div>
+
+                      {/* Resize handle (bottom edge) */}
+                      <div
+                        onPointerDown={(e) => beginDrag(e, di, bi, 'resize', range)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-black/5 dark:hover:bg-white/10"
+                        style={{ touchAction: 'none' }}
+                        title="Glisser pour redimensionner"
+                      />
 
                       {/* Status toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); onCycleStatus(di, bi) }}
                         className={cn(
-                          'absolute top-0.5 right-0.5 p-0.5 rounded-md hover:bg-white/40 dark:hover:bg-white/10 transition',
+                          'absolute top-0.5 right-0.5 p-0.5 rounded-md hover:bg-white/40 dark:hover:bg-white/10 transition z-10',
                           status ? STATUS_META[status].color : 'text-muted-foreground/50 hover:text-foreground',
                         )}
                         title={status ? STATUS_META[status].label : 'Marquer'}
@@ -1370,17 +1867,28 @@ function WeeklyCalendar({
                         }
                       </button>
 
-                      {isLive && (
+                      {/* Conflict badge */}
+                      {inConflict && !isDragging && (
+                        <span
+                          className="absolute top-0.5 left-0.5 px-1 py-0 text-[8px] font-bold uppercase rounded bg-rose-500 text-white shadow flex items-center gap-0.5"
+                          title="Ce créneau chevauche un autre"
+                        >
+                          <AlertTriangle className="w-2 h-2" />
+                          ⚠
+                        </span>
+                      )}
+
+                      {isLive && !inConflict && (
                         <span className="absolute top-0.5 left-0.5 px-1 py-0 text-[8px] font-bold uppercase rounded bg-emerald-500 text-white shadow">
                           ⏺
                         </span>
                       )}
 
-                      {link && height > 60 && (
+                      {link && height > 60 && !isDragging && (
                         <button
                           onClick={(e) => { e.stopPropagation(); onNavigate(link.path) }}
                           className={cn(
-                            'absolute bottom-0.5 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 transition',
+                            'absolute bottom-2 right-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 transition z-10',
                             'bg-white/60 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20',
                             cfg.color,
                           )}
