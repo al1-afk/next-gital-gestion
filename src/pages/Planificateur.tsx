@@ -5,7 +5,7 @@ import {
   Target, TrendingUp, Plus, Trash2, Edit2, Check, RotateCcw,
   Trophy, Zap, ListChecks, Sparkles, Calendar as CalendarIcon,
   ChevronLeft, ChevronRight, ArrowRight, Save, BookmarkPlus,
-  CheckCircle2, MinusCircle, RotateCw, Flame, X, Bell, BellOff,
+  CheckCircle2, MinusCircle, RotateCw, Flame, X, Bell, BellOff, Download, ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
@@ -272,6 +272,18 @@ function parseTimeRange(time: string): { start: number; end: number } | null {
   return null
 }
 
+/** Format minutes-of-day as HH:MM. */
+function toHHMM(min: number): string {
+  const h = Math.floor(min / 60) % 24
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+/** Compose a "HH:MM – HH:MM" string from start/end minutes. */
+function formatTimeRange(start: number, end: number): string {
+  return `${toHHMM(start)} – ${toHHMM(end)}`
+}
+
 /** Returns the actual Date for (weekKey, dayIdx). Hours zeroed. */
 function dateForWeekDay(weekKey: string, dayIdx: number): Date {
   const [y, w] = weekKey.split('-W').map(Number)
@@ -286,6 +298,80 @@ function dateForWeekDay(weekKey: string, dayIdx: number): Date {
 
 function nowMinutes(d = new Date()): number {
   return d.getHours() * 60 + d.getMinutes()
+}
+
+/* ─── Google Calendar / ICS export ──────────────────────────── */
+
+/** Format a Date as YYYYMMDDTHHMMSSZ (UTC, used by Google Cal & ICS). */
+function fmtIcsUtc(d: Date): string {
+  return d.toISOString().replace(/[-:]|\.\d{3}/g, '')
+}
+
+const DOW_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
+
+/** Build a Google Calendar "Add event" URL with weekly recurrence. */
+function googleCalendarUrl(block: Block, dayIdx: number, weekKey: string): string | null {
+  const range = parseTimeRange(block.time)
+  if (!range) return null
+  const base = dateForWeekDay(weekKey, dayIdx)
+  const startDt = new Date(base); startDt.setMinutes(range.start)
+  const endDt   = new Date(base); endDt.setMinutes(range.end)
+  const dow = DOW_CODES[startDt.getDay()]
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text:   `${block.emoji} ${block.title}`.trim(),
+    dates:  `${fmtIcsUtc(startDt)}/${fmtIcsUtc(endDt)}`,
+    details: block.subtitle || '',
+    recur:  `RRULE:FREQ=WEEKLY;BYDAY=${dow}`,
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
+/** Build an ICS string for the entire week (one VEVENT per block, weekly recurring). */
+function buildWeekICS(data: PlannerData, weekKey: string): string {
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//GestiQ//Planificateur//FR',
+    'CALSCALE:GREGORIAN',
+  ]
+  const sanitize = (s: string) => s.replace(/\\/g, '\\\\').replace(/[\n\r]/g, ' ').replace(/[,;]/g, ' ')
+  data.days.forEach((day, di) => {
+    const base = dateForWeekDay(weekKey, di)
+    day.blocks.forEach((b, bi) => {
+      const range = parseTimeRange(b.time)
+      if (!range) return
+      const startDt = new Date(base); startDt.setMinutes(range.start)
+      const endDt   = new Date(base); endDt.setMinutes(range.end)
+      const dow = DOW_CODES[startDt.getDay()]
+      const stamp = fmtIcsUtc(new Date())
+      lines.push('BEGIN:VEVENT')
+      lines.push(`UID:planner-${weekKey}-${di}-${bi}@gestiq`)
+      lines.push(`DTSTAMP:${stamp}`)
+      lines.push(`DTSTART:${fmtIcsUtc(startDt)}`)
+      lines.push(`DTEND:${fmtIcsUtc(endDt)}`)
+      lines.push(`SUMMARY:${sanitize(`${b.emoji} ${b.title}`)}`)
+      if (b.subtitle) lines.push(`DESCRIPTION:${sanitize(b.subtitle)}`)
+      lines.push(`RRULE:FREQ=WEEKLY;BYDAY=${dow}`)
+      lines.push('END:VEVENT')
+    })
+  })
+  lines.push('END:VCALENDAR')
+  return lines.join('\r\n')
+}
+
+/** Trigger a download of the ICS file. */
+function downloadICS(data: PlannerData, weekKey: string) {
+  const ics = buildWeekICS(data, weekKey)
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = `planificateur-${weekKey}.ics`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /* ─── Persistence ───────────────────────────────────────────── */
@@ -687,6 +773,16 @@ export default function Planificateur() {
                 </>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { downloadICS(data, weekKey); toast.success('Fichier .ics téléchargé — importez-le dans Google Calendar') }}
+              className="bg-white/10 hover:bg-white/20 border-white/20 text-white gap-1.5"
+              title="Télécharger un fichier .ics importable dans Google Calendar"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Google Cal</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setTmplDialogOpen(true)} className="bg-white/10 hover:bg-white/20 border-white/20 text-white gap-1.5">
               <BookmarkPlus className="w-3.5 h-3.5" />
               Modèles
@@ -877,9 +973,30 @@ export default function Planificateur() {
               Modifier la case
             </DialogTitle>
           </DialogHeader>
-          {editingBlock && editing && (
+          {editingBlock && editing && (() => {
+            const range     = parseTimeRange(editingBlock.time)
+            const startMin  = range?.start ?? 6 * 60
+            const endMin    = range?.end   ?? 7 * 60
+            const startStr  = toHHMM(startMin)
+            const endStr    = toHHMM(endMin)
+            const setStart = (v: string) => {
+              const [h, m] = v.split(':').map(Number)
+              if (Number.isNaN(h) || Number.isNaN(m)) return
+              const ns = h * 60 + m
+              const ne = ns >= endMin ? Math.min(24 * 60 - 1, ns + 60) : endMin
+              updateBlock(editing.dayIdx, editing.blockIdx, { time: formatTimeRange(ns, ne) })
+            }
+            const setEnd = (v: string) => {
+              const [h, m] = v.split(':').map(Number)
+              if (Number.isNaN(h) || Number.isNaN(m)) return
+              let ne = h * 60 + m
+              if (ne <= startMin) ne = Math.min(24 * 60 - 1, startMin + 30)
+              updateBlock(editing.dayIdx, editing.blockIdx, { time: formatTimeRange(startMin, ne) })
+            }
+            const gcalUrl = googleCalendarUrl(editingBlock, editing.dayIdx, weekKey)
+            return (
             <div className="space-y-3 pt-1">
-              <div className="grid grid-cols-[60px_1fr] gap-3">
+              <div className="grid grid-cols-[60px_1fr_1fr] gap-3">
                 <div className="space-y-1.5">
                   <label className="form-label">Emoji</label>
                   <Input
@@ -890,11 +1007,19 @@ export default function Planificateur() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="form-label">Plage horaire / créneau</label>
+                  <label className="form-label">Début</label>
                   <Input
-                    value={editingBlock.time}
-                    onChange={e => updateBlock(editing.dayIdx, editing.blockIdx, { time: e.target.value })}
-                    placeholder="06:00 – 07:00"
+                    type="time"
+                    value={startStr}
+                    onChange={e => setStart(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="form-label">Fin</label>
+                  <Input
+                    type="time"
+                    value={endStr}
+                    onChange={e => setEnd(e.target.value)}
                   />
                 </div>
               </div>
@@ -938,6 +1063,19 @@ export default function Planificateur() {
                 </div>
               </div>
 
+              {gcalUrl && (
+                <a
+                  href={gcalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 w-full text-xs font-medium px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition"
+                  title="Ouvre Google Calendar avec cet événement (récurrent chaque semaine)"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Ajouter à Google Calendar (récurrent)
+                </a>
+              )}
+
               <div className="flex justify-between gap-2 pt-2">
                 <Button
                   variant="outline"
@@ -952,7 +1090,8 @@ export default function Planificateur() {
                 </Button>
               </div>
             </div>
-          )}
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
