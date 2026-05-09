@@ -333,7 +333,7 @@ export default function FinanceIA() {
                         <Pie data={byCat} dataKey="total" nameKey="category" outerRadius={100} innerRadius={55} paddingAngle={2}>
                           {byCat.map(d => <Cell key={d.category} fill={CATEGORY_COLORS[d.category]} />)}
                         </Pie>
-                        <Tooltip formatter={(v: number, _n, p) => [formatCurrency(v), CATEGORY_LABELS[p.payload.category as Category]]} />
+                        <Tooltip formatter={(v, _n, p) => [formatCurrency(Number(v)), CATEGORY_LABELS[p.payload.category as Category]]} />
                         <Legend formatter={(v) => CATEGORY_LABELS[v as Category]} />
                       </PieChart>
                     </ResponsiveContainer>
@@ -350,7 +350,7 @@ export default function FinanceIA() {
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-card-border)" />
                         <XAxis dataKey="month" stroke="currentColor" fontSize={12} />
                         <YAxis stroke="currentColor" fontSize={12} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                         <Area type="monotone" dataKey="income"  stroke="#10b981" fill="#10b98133" name="Revenus" />
                         <Area type="monotone" dataKey="expense" stroke="#f43f5e" fill="#f43f5e33" name="Dépenses" />
                       </AreaChart>
@@ -368,7 +368,7 @@ export default function FinanceIA() {
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-card-border)" />
                         <XAxis type="number" stroke="currentColor" fontSize={12} />
                         <YAxis type="category" dataKey="label" stroke="currentColor" fontSize={11} width={140} />
-                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Tooltip formatter={(v) => formatCurrency(Number(v))} />
                         <Bar dataKey="total" fill="#22c55e" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -567,7 +567,7 @@ function Forecast({ monthly }: { monthly: { month: string; net: number }[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-card-border)" />
           <XAxis dataKey="month" stroke="currentColor" fontSize={12} />
           <YAxis stroke="currentColor" fontSize={12} />
-          <Tooltip formatter={(v: number) => formatCurrency(v)} />
+          <Tooltip formatter={(v) => formatCurrency(Number(v))} />
           <Area type="monotone" dataKey="net" stroke="#3b82f6" fill="#3b82f633" name="Cashflow net" />
         </AreaChart>
       </ResponsiveContainer>
