@@ -23,6 +23,7 @@ const ChequesRecus   = lazy(() => import('@/pages/ChequesRecus'))
 const ChequesEmis    = lazy(() => import('@/pages/ChequesEmis'))
 const Depenses       = lazy(() => import('@/pages/Depenses'))
 const Finances       = lazy(() => import('@/pages/Finances'))
+const FinanceIA      = lazy(() => import('@/pages/FinanceIA'))
 const Abonnements    = lazy(() => import('@/pages/Abonnements'))
 const Equipe         = lazy(() => import('@/pages/Equipe'))
 const Fournisseurs   = lazy(() => import('@/pages/Fournisseurs'))
@@ -98,6 +99,7 @@ export default function App() {
               <Route path="cheques-emis"               element={<ChequesEmis />} />
               <Route path="depenses"                   element={<Depenses />} />
               <Route path="finances"                   element={<Finances />} />
+              <Route path="finance-ia"                 element={<FinanceIA />} />
               <Route path="abonnements"                element={<Abonnements />} />
               <Route path="abonnements-clients"        element={<AbonnementsClients />} />
               <Route path="integrations"               element={<Integrations />} />

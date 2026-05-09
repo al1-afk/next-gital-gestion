@@ -6,7 +6,7 @@ import {
   CreditCard, DollarSign, TrendingUp, Globe, Server, Package, ShoppingCart,
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
-  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target,
+  Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target, Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
@@ -41,6 +41,7 @@ export const ALL_MODULES: { key: string; label: string }[] = [
   { key: 'cheques-emis',      label: 'Chèques émis' },
   { key: 'depenses',          label: 'Dépenses' },
   { key: 'finances',          label: 'Finances' },
+  { key: 'finance-ia',        label: 'Finance IA' },
   { key: 'abonnements',       label: 'Abonnements' },
   { key: 'abonnements-clients', label: 'Abonnements clients' },
   { key: 'equipe',            label: 'Équipe' },
@@ -86,6 +87,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Chèques émis',   href: '/cheques-emis', icon: Wallet, module: 'cheques-emis' },
       { label: 'Dépenses',       href: '/depenses',     icon: DollarSign, module: 'depenses' },
       { label: 'Finances',       href: '/finances',     icon: TrendingUp, module: 'finances' },
+      { label: 'Finance IA',     href: '/finance-ia',   icon: Sparkles,   badge: 'IA', module: 'finance-ia' },
       { label: 'Abonnements',         href: '/abonnements',         icon: Repeat, module: 'abonnements' },
       { label: 'Abonnements Clients', href: '/abonnements-clients',  icon: RefreshCcw, badge: 'MRR', module: 'abonnements-clients' },
     ],

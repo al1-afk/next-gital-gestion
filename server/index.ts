@@ -11,6 +11,7 @@ import crudRoutes     from './routes/crud'
 import tenantRoutes   from './routes/tenants'
 import stockRoutes    from './routes/stock'
 import vehiclesRoutes from './routes/vehicles'
+import financeAiRoutes from './routes/financeAi'
 
 dotenv.config({ path: '.env.local' })
 
@@ -76,6 +77,7 @@ app.use('/api/auth',     authRoutes)
 app.use('/api/tenants',  tenantRoutes)
 app.use('/api/stock',    stockRoutes)
 app.use('/api/vehicles', vehiclesRoutes)
+app.use('/api/finance-ai', financeAiRoutes)
 app.use('/api',          crudRoutes)
 
 /* ── Health check (no DB details in prod) ───────────────────── */
