@@ -1,3 +1,10 @@
+export type AccountType = 'personal' | 'company'
+
+export const ACCOUNT_LABELS: Record<AccountType, string> = {
+  personal: 'Compte personnel',
+  company:  'Compte société',
+}
+
 export type TxType = 'income' | 'expense'
 
 export type Category =

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Upload, FileText, Sparkles, TrendingUp, TrendingDown, Wallet,
   Megaphone, Users, AlertTriangle, Trash2, Search, RefreshCw, Banknote, Server, Bot,
+  User, Building2,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -19,8 +20,8 @@ import { parseBankStatement } from '@/lib/financeAI/parser'
 import { transactionsStore } from '@/lib/financeAI/storage'
 import { checkAiStatus, classifyWithAI } from '@/lib/financeAI/aiClient'
 import {
-  CATEGORY_LABELS, CATEGORY_COLORS,
-  type BankTransaction, type Category,
+  CATEGORY_LABELS, CATEGORY_COLORS, ACCOUNT_LABELS,
+  type BankTransaction, type Category, type AccountType,
 } from '@/lib/financeAI/types'
 import {
   computeKPIs, expensesByCategory, monthlyEvolution,
@@ -35,6 +36,7 @@ const ALL_CATEGORIES: Category[] = [
 ]
 
 export default function FinanceIA() {
+  const [account, setAccount] = useState<AccountType>(() => transactionsStore.getActive())
   const [transactions, setTransactions] = useState<BankTransaction[]>([])
   const [parsing, setParsing] = useState(false)
   const [aiBusy, setAiBusy] = useState(false)
@@ -44,11 +46,22 @@ export default function FinanceIA() {
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setTransactions(transactionsStore.list())
+    setTransactions(transactionsStore.list(account))
+    transactionsStore.setActive(account)
+  }, [account])
+
+  useEffect(() => {
     checkAiStatus().then(setAiEnabled).catch(() => setAiEnabled(false))
   }, [])
 
-  const refresh = () => setTransactions(transactionsStore.list())
+  const refresh = () => setTransactions(transactionsStore.list(account))
+
+  const switchAccount = (next: AccountType) => {
+    if (next === account) return
+    setAccount(next)
+    setSearch('')
+    setFilterCategory('all')
+  }
 
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -64,7 +77,7 @@ export default function FinanceIA() {
         }
         const result = await parseBankStatement(file)
         totalMatched += result.matched
-        added += transactionsStore.addMany(result.transactions)
+        added += transactionsStore.addMany(account, result.transactions)
       }
       refresh()
       if (added > 0) toast.success(`${added} transaction(s) importée(s) — ${totalMatched} détectée(s)`)
@@ -80,18 +93,18 @@ export default function FinanceIA() {
   }
 
   const updateCategory = (id: string, cat: Category) => {
-    transactionsStore.updateCategory(id, cat)
+    transactionsStore.updateCategory(account, id, cat)
     refresh()
   }
 
   const removeTx = (id: string) => {
-    transactionsStore.remove(id)
+    transactionsStore.remove(account, id)
     refresh()
   }
 
   const clearAll = () => {
-    if (!confirm('Effacer toutes les transactions importées ?')) return
-    transactionsStore.clear()
+    if (!confirm(`Effacer toutes les transactions du ${ACCOUNT_LABELS[account].toLowerCase()} ?`)) return
+    transactionsStore.clear(account)
     refresh()
     toast.success('Données effacées')
   }
@@ -109,22 +122,13 @@ export default function FinanceIA() {
     try {
       const map = await classifyWithAI(targets)
       let updated = 0
-      for (const [id, r] of map) {
-        if (r.confidence < 0.4) continue
-        transactionsStore.updateCategory(id, r.category)
-        // updateCategory marks manual_override = true, which is wrong here —
-        // we want the AI result to remain auto so the user can re-run later.
-        // Reset that flag below by writing through the raw store.
+      const next = transactionsStore.list(account).map(t => {
+        const r = map.get(t.id)
+        if (!r || r.confidence < 0.4) return t
         updated++
-      }
-      // Patch: clear manual_override flag on AI-classified ones
-      const list = transactionsStore.list().map(t => {
-        if (map.has(t.id) && map.get(t.id)!.confidence >= 0.4) {
-          return { ...t, manual_override: false, ai_confidence: map.get(t.id)!.confidence }
-        }
-        return t
+        return { ...t, category: r.category, ai_confidence: r.confidence, manual_override: false }
       })
-      localStorage.setItem('gestiq_finance_ai_transactions', JSON.stringify(list))
+      transactionsStore.raw.write(account, next)
       refresh()
       toast.success(`${updated} transaction(s) reclassée(s) par Claude`)
     } catch (err: any) {
@@ -143,7 +147,7 @@ export default function FinanceIA() {
   const alerts    = useMemo(() => generateAlerts(transactions), [transactions])
   const recurring = useMemo(() => detectRecurring(transactions), [transactions])
   const tops      = useMemo(() => topClients(transactions), [transactions])
-  const sources   = useMemo(() => transactionsStore.bySource(), [transactions])
+  const sources   = useMemo(() => transactionsStore.bySource(account), [account, transactions])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -170,6 +174,7 @@ export default function FinanceIA() {
           <p className="text-sm text-muted-foreground mt-1">
             Importez vos relevés bancaires PDF et obtenez une analyse financière intelligente automatique.
           </p>
+          <AccountSwitcher account={account} onChange={switchAccount} />
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -414,6 +419,33 @@ export default function FinanceIA() {
 }
 
 /* ── Sub-components ── */
+
+function AccountSwitcher({
+  account, onChange,
+}: { account: AccountType; onChange: (a: AccountType) => void }) {
+  const Tab = ({ value, label, Icon }: { value: AccountType; label: string; Icon: React.ElementType }) => {
+    const active = account === value
+    return (
+      <button
+        onClick={() => onChange(value)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+          active
+            ? 'bg-white dark:bg-slate-800 text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </button>
+    )
+  }
+  return (
+    <div className="inline-flex items-center gap-1 mt-3 p-1 rounded-lg bg-slate-100 dark:bg-slate-900/40 border border-[var(--surface-card-border)]">
+      <Tab value="personal" label={ACCOUNT_LABELS.personal} Icon={User} />
+      <Tab value="company"  label={ACCOUNT_LABELS.company}  Icon={Building2} />
+    </div>
+  )
+}
 
 function KpiCard(props: {
   label: string; value: number; icon: React.ElementType
