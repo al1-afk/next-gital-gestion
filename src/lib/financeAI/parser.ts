@@ -43,9 +43,9 @@ const DEBIT_KEYWORDS: RegExp[] = [
 ]
 
 const CREDIT_KEYWORDS: RegExp[] = [
-  /\bvirement\s+re[cç]u/i,
+  /\bvirement\b.*?\bre[cç]u\b/i,    // VIREMENT [INSTANTANE/...] RECU
+  /\bvirt\b.*?\bre[cç]u\b/i,         // VIRT [...] RECU
   /\bvir\.?\s+re[cç]u/i,
-  /\bvirt\s+re[cç]u/i,
   /\bversement\b/i,
   /\brestitution\b/i,
   /\bremise\s+(de\s+)?(ch[eè]que|esp[èe]ce)/i,
@@ -95,6 +95,44 @@ function inferYear(lines: string[]): number {
   }
   if (years.size === 0) return new Date().getFullYear()
   return Array.from(years.entries()).sort((a, b) => b[1] - a[1])[0][0]
+}
+
+interface Period { start: Date | null; end: Date | null }
+
+/* Find the SOLDE DEPART and NOUVEAU SOLDE dates so transactions
+   recorded only as DD/MM can be assigned to the correct year on
+   statements that span December → January. */
+function inferPeriod(lines: string[]): Period {
+  let start: Date | null = null
+  let end:   Date | null = null
+  const startRe = /\bsolde\s+d[ée]part\s+au\s*:?\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/i
+  const endRe   = /\bnouveau\s+solde\s+au\s*:?\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/i
+  for (const line of lines) {
+    if (!start) {
+      const m = line.match(startRe)
+      if (m) start = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+    }
+    if (!end) {
+      const m = line.match(endRe)
+      if (m) end = new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10))
+    }
+  }
+  return { start, end }
+}
+
+function pickYear(month: number, period: Period, fallback: number): number {
+  if (!period.start || !period.end) return fallback
+  const sy = period.start.getFullYear()
+  const ey = period.end.getFullYear()
+  if (sy === ey) return sy
+  // Multi-year period (e.g. statement covers Dec 2025 → Jan 2026)
+  const sm = period.start.getMonth() + 1
+  const em = period.end.getMonth() + 1
+  if (sm > em) {
+    if (month >= sm) return sy
+    if (month <= em) return ey
+  }
+  return fallback
 }
 
 const SKIP_PATTERNS: RegExp[] = [
@@ -168,6 +206,7 @@ function buildIso(dd: number, mm: number, yyyy: number): string | null {
 
 function parseLines(lines: string[]): ParsedRow[] {
   const fallbackYear = inferYear(lines)
+  const period = inferPeriod(lines)
   const rows: ParsedRow[] = []
   let currentDate: string | null = null
 
@@ -202,11 +241,10 @@ function parseLines(lines: string[]): ParsedRow[] {
     const am = line.match(AMOUNT_RE)
     if (!am) continue
 
-    const iso = buildIso(
-      parseInt(dm[1], 10),
-      parseInt(dm[2], 10),
-      dm[3] ? parseInt(dm[3], 10) : fallbackYear,
-    )
+    const dd = parseInt(dm[1], 10)
+    const mm = parseInt(dm[2], 10)
+    const yyyy = dm[3] ? parseInt(dm[3], 10) : pickYear(mm, period, fallbackYear)
+    const iso = buildIso(dd, mm, yyyy)
     if (!iso) continue
 
     const amount = parseAmount(am[1])
