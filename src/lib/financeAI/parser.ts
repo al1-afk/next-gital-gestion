@@ -104,6 +104,7 @@ const SKIP_PATTERNS: RegExp[] = [
   /\bancien\s+solde\b/i,
   /\btotal\s+des\s+mouvements/i,
   /\bpage\s+n[°o]/i,
+  /^op[ée]rations?$/i,
 ]
 
 /* Date prefix accepts:
@@ -119,6 +120,11 @@ const DATE_RE = /^(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](\d{2,4}))?(?:\s*\d{1,2}[\/
    prevents matching the tail of an unrelated number like a card ref
    "2229 3,01" → only "3,01" is captured. */
 const AMOUNT_RE = /(?:^|\s)(\d{1,3}(?:[\s.  ]\d{3})*[.,]\d{2})\s*(?:MAD|DH|DHS|EUR|USD|€|\$)?\s*$/i
+
+/* Mobile/web banking layout: a stand-alone date header followed by lines
+   that carry only a label and a signed amount (no date prefix on each row). */
+const DATE_ONLY_RE = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/
+const SIGNED_AMOUNT_RE = /^(.+?)\s+([+\-])\s*(\d{1,3}(?:[\s.  ]\d{3})*[.,]\d{2})\s*(?:MAD|DH|DHS)?\s*$/i
 
 async function extractLines(file: File): Promise<string[]> {
   const buf = await file.arrayBuffer()
@@ -154,22 +160,54 @@ async function extractLines(file: File): Promise<string[]> {
   return lines
 }
 
+function buildIso(dd: number, mm: number, yyyy: number): string | null {
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null
+  if (yyyy < 100) yyyy += yyyy >= 70 ? 1900 : 2000
+  return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+}
+
 function parseLines(lines: string[]): ParsedRow[] {
   const fallbackYear = inferYear(lines)
   const rows: ParsedRow[] = []
+  let currentDate: string | null = null
+
   for (const line of lines) {
     if (SKIP_PATTERNS.some(p => p.test(line))) continue
+
+    // ── Format B (mobile/web app): stand-alone date header
+    const dom = line.match(DATE_ONLY_RE)
+    if (dom) {
+      const iso = buildIso(parseInt(dom[1], 10), parseInt(dom[2], 10), parseInt(dom[3], 10))
+      if (iso) currentDate = iso
+      continue
+    }
+
+    // ── Format B continued: signed-amount row that uses currentDate
+    if (currentDate) {
+      const sam = line.match(SIGNED_AMOUNT_RE)
+      if (sam) {
+        const label = sam[1].replace(/\s+/g, ' ').trim()
+        const sign = sam[2] === '+' ? 1 : -1
+        const amount = parseAmount(sam[3])
+        if (amount !== null && amount !== 0 && label.length >= 3) {
+          rows.push({ date: currentDate, label, amount: sign * Math.abs(amount) })
+        }
+        continue
+      }
+    }
+
+    // ── Format A (desktop bank statement): date prefix + unsigned amount
     const dm = line.match(DATE_RE)
     if (!dm) continue
     const am = line.match(AMOUNT_RE)
     if (!am) continue
 
-    const dd = parseInt(dm[1], 10)
-    const mm = parseInt(dm[2], 10)
-    let yyyy = dm[3] ? parseInt(dm[3], 10) : fallbackYear
-    if (yyyy < 100) yyyy += yyyy >= 70 ? 1900 : 2000
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) continue
-    const date = `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+    const iso = buildIso(
+      parseInt(dm[1], 10),
+      parseInt(dm[2], 10),
+      dm[3] ? parseInt(dm[3], 10) : fallbackYear,
+    )
+    if (!iso) continue
 
     const amount = parseAmount(am[1])
     if (amount === null || amount === 0) continue
@@ -181,7 +219,7 @@ function parseLines(lines: string[]): ParsedRow[] {
     if (!label || label.length < 3) continue
 
     const sign = detectSign(label)
-    rows.push({ date, label, amount: sign * Math.abs(amount) })
+    rows.push({ date: iso, label, amount: sign * Math.abs(amount) })
   }
   return rows
 }
