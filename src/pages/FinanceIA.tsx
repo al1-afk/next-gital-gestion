@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Upload, FileText, Sparkles, TrendingUp, TrendingDown, Wallet,
   Megaphone, Users, AlertTriangle, Trash2, Search, RefreshCw, Banknote, Server, Bot,
-  User, Building2,
+  User, Building2, Calendar, ArrowDownRight, ArrowUpRight,
 } from 'lucide-react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -26,6 +26,7 @@ import {
 import {
   computeKPIs, expensesByCategory, monthlyEvolution,
   generateAlerts, detectRecurring, topClients,
+  monthlyDetailedStats, type MonthlyDetail,
 } from '@/lib/financeAI/insights'
 
 const ALL_CATEGORIES: Category[] = [
@@ -148,6 +149,7 @@ export default function FinanceIA() {
   const recurring = useMemo(() => detectRecurring(transactions), [transactions])
   const tops      = useMemo(() => topClients(transactions), [transactions])
   const sources   = useMemo(() => transactionsStore.bySource(account), [account, transactions])
+  const monthlyDetail = useMemo(() => monthlyDetailedStats(transactions), [transactions])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -225,6 +227,7 @@ export default function FinanceIA() {
             <TabsTrigger value="analyse">Analyse</TabsTrigger>
             <TabsTrigger value="depenses">Dépenses</TabsTrigger>
             <TabsTrigger value="revenus">Revenus</TabsTrigger>
+            <TabsTrigger value="mensuel">Mensuel</TabsTrigger>
             <TabsTrigger value="rapports">Rapports</TabsTrigger>
             <TabsTrigger value="previsions">Prévisions</TabsTrigger>
           </TabsList>
@@ -300,6 +303,11 @@ export default function FinanceIA() {
 
           <TabsContent value="revenus">
             <TransactionTable rows={incomes} onCategory={updateCategory} onRemove={removeTx} />
+          </TabsContent>
+
+          {/* Mensuel — détail par mois */}
+          <TabsContent value="mensuel" className="space-y-4">
+            <MonthlyBreakdown months={monthlyDetail} />
           </TabsContent>
 
           {/* Rapports */}
@@ -570,6 +578,212 @@ function EmptyState({ onUpload }: { onUpload: () => void }) {
 
 function Empty({ text = 'Pas encore de données.' }: { text?: string }) {
   return <p className="text-sm text-muted-foreground py-6 text-center">{text}</p>
+}
+
+function MonthlyBreakdown({ months }: { months: MonthlyDetail[] }) {
+  if (months.length === 0) {
+    return (
+      <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
+        <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50" />
+        Aucune donnée mensuelle. Importez un relevé pour commencer.
+      </CardContent></Card>
+    )
+  }
+
+  const maxExpense = Math.max(...months.map(m => m.expense), 1)
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+        <SummaryStat
+          label="Mois analysés"
+          value={String(months.length)}
+          icon={Calendar}
+        />
+        <SummaryStat
+          label="Cash retiré (total)"
+          value={formatCurrency(months.reduce((s, m) => s + m.cashWithdrawn, 0))}
+          icon={Banknote}
+          color="text-amber-600"
+        />
+        <SummaryStat
+          label="Dépenses moyennes / mois"
+          value={formatCurrency(months.reduce((s, m) => s + m.expense, 0) / months.length)}
+          icon={TrendingDown}
+          color="text-rose-600"
+        />
+      </div>
+
+      {months.map(m => <MonthCard key={m.month} m={m} maxExpense={maxExpense} />)}
+    </div>
+  )
+}
+
+function SummaryStat({
+  label, value, icon: Icon, color = 'text-foreground',
+}: {
+  label: string; value: string; icon: React.ElementType; color?: string
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4 flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800/40 ${color}`}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">{label}</p>
+          <p className={`text-base font-bold truncate ${color}`}>{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MonthCard({ m, maxExpense }: { m: MonthlyDetail; maxExpense: number }) {
+  const expenseShare = (m.expense / maxExpense) * 100
+  const profitColor = m.net >= 0 ? 'text-emerald-600' : 'text-rose-600'
+  const totalCatExpense = m.categories.reduce((s, c) => s + c.total, 0) || 1
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-500" />
+            <CardTitle className="text-lg">{m.monthLabel}</CardTitle>
+            <Badge variant="default" className="text-[10px]">{m.txCount} op.</Badge>
+          </div>
+          <div className={`text-sm font-bold ${profitColor}`}>
+            {m.net >= 0 ? '+' : ''}{formatCurrency(m.net)} net
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+          <MiniStat
+            label="Revenus"
+            value={formatCurrency(m.income)}
+            icon={ArrowUpRight}
+            color="text-emerald-600"
+            bg="bg-emerald-50 dark:bg-emerald-950/30"
+          />
+          <MiniStat
+            label="Dépenses"
+            value={formatCurrency(m.expense)}
+            icon={ArrowDownRight}
+            color="text-rose-600"
+            bg="bg-rose-50 dark:bg-rose-950/30"
+          />
+          <MiniStat
+            label="Cash retiré"
+            value={formatCurrency(m.cashWithdrawn)}
+            icon={Banknote}
+            color="text-amber-600"
+            bg="bg-amber-50 dark:bg-amber-950/30"
+          />
+          <MiniStat
+            label="Publicité"
+            value={formatCurrency(m.adSpend)}
+            icon={Megaphone}
+            color="text-pink-600"
+            bg="bg-pink-50 dark:bg-pink-950/30"
+          />
+        </div>
+
+        {/* Volume bar — relative expense weight vs other months */}
+        <div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
+            <span>Volume des dépenses (relatif)</span>
+            <span>{Math.round(expenseShare)}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800/40 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-rose-400 to-rose-600"
+              style={{ width: `${expenseShare}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Categories */}
+        {m.categories.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Répartition par catégorie
+            </p>
+            <div className="space-y-1.5">
+              {m.categories.map(c => {
+                const pct = (c.total / totalCatExpense) * 100
+                return (
+                  <div key={c.category} className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CATEGORY_COLORS[c.category] }} />
+                    <span className="text-xs flex-1 min-w-0 truncate">{CATEGORY_LABELS[c.category]}</span>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">{c.count}×</span>
+                    <div className="w-20 sm:w-32 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800/40 overflow-hidden">
+                      <div className="h-full" style={{ width: `${pct}%`, background: CATEGORY_COLORS[c.category] }} />
+                    </div>
+                    <span className="text-xs font-semibold tabular-nums w-24 text-right">{formatCurrency(c.total)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Top expenses */}
+        {m.topExpenses.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Plus grosses dépenses
+            </p>
+            <div className="space-y-1">
+              {m.topExpenses.map(t => (
+                <div key={t.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-12">{t.date.slice(8)}/{t.date.slice(5, 7)}</span>
+                  <span className="flex-1 min-w-0 truncate">{t.label}</span>
+                  <span className="text-rose-600 font-semibold tabular-nums">{formatCurrency(t.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Top incomes */}
+        {m.topIncomes.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+              Plus gros revenus
+            </p>
+            <div className="space-y-1">
+              {m.topIncomes.map(t => (
+                <div key={t.id} className="flex items-center gap-2 text-xs">
+                  <span className="text-[10px] text-muted-foreground tabular-nums w-12">{t.date.slice(8)}/{t.date.slice(5, 7)}</span>
+                  <span className="flex-1 min-w-0 truncate">{t.label}</span>
+                  <span className="text-emerald-600 font-semibold tabular-nums">+{formatCurrency(t.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function MiniStat({
+  label, value, icon: Icon, color, bg,
+}: {
+  label: string; value: string; icon: React.ElementType; color: string; bg: string
+}) {
+  return (
+    <div className={`${bg} rounded-lg p-2.5`}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon className={`w-3 h-3 ${color}`} />
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+      </div>
+      <p className={`text-sm font-bold ${color}`}>{value}</p>
+    </div>
+  )
 }
 
 function Forecast({ monthly }: { monthly: { month: string; net: number }[] }) {

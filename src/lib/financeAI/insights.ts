@@ -46,6 +46,90 @@ export function expensesByCategory(list: BankTransaction[]): CategoryBreakdown[]
   return Array.from(map.values()).sort((a, b) => b.total - a.total)
 }
 
+export interface MonthlyDetail {
+  month: string          // yyyy-mm
+  monthLabel: string     // "Mai 2026"
+  income: number
+  expense: number
+  net: number
+  cashWithdrawn: number
+  freelancesPaid: number
+  adSpend: number
+  txCount: number
+  categories: { category: Category; total: number; count: number }[]
+  topExpenses: BankTransaction[]
+  topIncomes:  BankTransaction[]
+}
+
+function formatMonthLabel(yyyymm: string): string {
+  const [y, m] = yyyymm.split('-').map(Number)
+  const d = new Date(y, m - 1, 1)
+  const s = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+export function monthlyDetailedStats(list: BankTransaction[]): MonthlyDetail[] {
+  const groups = new Map<string, BankTransaction[]>()
+  for (const t of list) {
+    const key = t.date.slice(0, 7)
+    const arr = groups.get(key) ?? []
+    arr.push(t)
+    groups.set(key, arr)
+  }
+
+  const out: MonthlyDetail[] = []
+  for (const [month, txs] of groups) {
+    let income = 0, expense = 0, cash = 0, freelance = 0, ads = 0
+    const catMap = new Map<Category, { total: number; count: number }>()
+
+    for (const t of txs) {
+      if (t.amount >= 0) income += t.amount
+      else                expense += Math.abs(t.amount)
+      if (t.category === 'cash_withdrawal') cash     += Math.abs(t.amount)
+      if (t.category === 'freelance')       freelance += Math.abs(t.amount)
+      if (t.category === 'advertising')     ads      += Math.abs(t.amount)
+
+      if (t.amount < 0) {
+        const c = catMap.get(t.category) ?? { total: 0, count: 0 }
+        c.total += Math.abs(t.amount)
+        c.count++
+        catMap.set(t.category, c)
+      }
+    }
+
+    const categories = Array.from(catMap.entries())
+      .map(([category, v]) => ({ category, ...v }))
+      .sort((a, b) => b.total - a.total)
+
+    const topExpenses = txs
+      .filter(t => t.amount < 0)
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, 5)
+
+    const topIncomes = txs
+      .filter(t => t.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+
+    out.push({
+      month,
+      monthLabel: formatMonthLabel(month),
+      income,
+      expense,
+      net: income - expense,
+      cashWithdrawn: cash,
+      freelancesPaid: freelance,
+      adSpend: ads,
+      txCount: txs.length,
+      categories,
+      topExpenses,
+      topIncomes,
+    })
+  }
+
+  return out.sort((a, b) => b.month.localeCompare(a.month))
+}
+
 export interface MonthlyPoint { month: string; income: number; expense: number; net: number }
 
 export function monthlyEvolution(list: BankTransaction[]): MonthlyPoint[] {
