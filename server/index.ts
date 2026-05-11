@@ -12,6 +12,7 @@ import tenantRoutes   from './routes/tenants'
 import stockRoutes    from './routes/stock'
 import vehiclesRoutes from './routes/vehicles'
 import financeAiRoutes from './routes/financeAi'
+import publicLeadsRoutes from './routes/publicLeads'
 
 dotenv.config({ path: '.env.local' })
 
@@ -49,20 +50,31 @@ app.use(helmet({
 app.set('trust proxy', 1)
 app.use(cookieParser())
 
-/* ── CORS — strict origin list (localhost:* in dev, *.nextgital.tech in prod) ─── */
+/* ── CORS — strict origin list (localhost:* in dev, *.nextgital.tech in prod).
+   /api/public/* is OPEN by design: it's the embeddable widget intake, so any
+   origin can POST a lead (auth is via the workspace key, not the browser session). */
 const LOCALHOST_DEV_RE = /^http:\/\/localhost:\d+$/
-const NEXTGITAL_RE     = /^https:\/\/[a-z0-9-]+\.nextgital\.tech$/i
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true)
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
-    if (NEXTGITAL_RE.test(origin)) return cb(null, true)
-    if (!isProd && LOCALHOST_DEV_RE.test(origin)) return cb(null, true)
-    cb(new Error(`CORS: origin ${origin} non autorisée`))
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+const NEXTGITAL_RE     = /^https:\/\/[a-z0-9-]+\.nextgital\.(tech|ma)$/i
+app.use(cors((req, cb) => {
+  if (req.path && req.path.startsWith('/api/public/')) {
+    return cb(null, {
+      origin: '*',
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'X-Workspace-Key'],
+    })
+  }
+  const origin = req.headers.origin
+  const allowed =
+    !origin ||
+    ALLOWED_ORIGINS.includes(origin) ||
+    NEXTGITAL_RE.test(origin) ||
+    (!isProd && LOCALHOST_DEV_RE.test(origin))
+  cb(null, {
+    origin: allowed,
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
 }))
 
 /* ── Body parsing + sanitization ────────────────────────────── */
@@ -78,6 +90,7 @@ app.use('/api/tenants',  tenantRoutes)
 app.use('/api/stock',    stockRoutes)
 app.use('/api/vehicles', vehiclesRoutes)
 app.use('/api/finance-ai', financeAiRoutes)
+app.use('/api/public',    publicLeadsRoutes)
 app.use('/api',          crudRoutes)
 
 /* ── Health check (no DB details in prod) ───────────────────── */

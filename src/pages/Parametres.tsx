@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, User, Bell, Shield, Globe, Save, RefreshCcw, Check, Eye, EyeOff, Download, Smartphone, CheckCircle2, MonitorSmartphone, Apple } from 'lucide-react'
+import { Settings, User, Bell, Shield, Globe, Save, RefreshCcw, Check, Eye, EyeOff, Download, Smartphone, CheckCircle2, MonitorSmartphone, Apple, Code2, Copy, KeyRound, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -179,6 +179,7 @@ export default function Parametres() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="securite">Sécurité</TabsTrigger>
           <TabsTrigger value="application">Application</TabsTrigger>
+          <TabsTrigger value="integrations">Intégrations</TabsTrigger>
         </TabsList>
 
         {/* ── Profil ── */}
@@ -430,7 +431,137 @@ export default function Parametres() {
             </div>
           </div>
         </TabsContent>
+
+        {/* ── Intégrations ── */}
+        <TabsContent value="integrations">
+          <WidgetIntegration />
+        </TabsContent>
       </Tabs>
+    </div>
+  )
+}
+
+/* ── Widget Lead — generates a workspace key and shows the embed snippet ── */
+function WidgetIntegration() {
+  const [key, setKey]       = useState<string>('')
+  const [loading, setLoad]  = useState(false)
+  const [source, setSource] = useState('Landing nextgital.ma')
+  const [color, setColor]   = useState('#2563eb')
+
+  const apiBase = (import.meta as any).env?.VITE_API_URL || window.location.origin
+  const widgetSrc = apiBase.replace(/\/+$/, '') + '/widget.js'
+
+  const generate = async () => {
+    setLoad(true)
+    try {
+      const r = await api.get<{ key: string }>('/api/public/widget-key')
+      setKey(r.key)
+      toast.success('Clé générée')
+    } catch (e: any) {
+      toast.error('Génération impossible : ' + (e?.message ?? 'erreur'))
+    } finally { setLoad(false) }
+  }
+
+  const snippet = key
+    ? `<script src="${widgetSrc}"
+        data-workspace="${key}"
+        data-api="${apiBase.replace(/\/+$/, '')}"
+        data-source="${source.replace(/"/g, '&quot;')}"
+        data-color="${color}">
+</script>`
+    : ''
+
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success('Copié dans le presse-papier'))
+      .catch(() => toast.error('Copie impossible'))
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="card-premium p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="section-title flex items-center gap-2">
+              <Code2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              Widget de capture de leads
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+              Collez le code ci-dessous sur n'importe quelle page de votre site (Landing,
+              page contact, etc.). Le formulaire qui s'affiche envoie chaque soumission
+              directement dans <b>CRM &gt; Prospects</b> de cet espace de travail.
+            </p>
+          </div>
+          <Button onClick={generate} disabled={loading} className="gap-1.5">
+            {loading
+              ? <><RefreshCcw className="w-4 h-4 animate-spin" /> …</>
+              : key
+                ? <><KeyRound className="w-4 h-4" /> Régénérer la clé</>
+                : <><KeyRound className="w-4 h-4" /> Générer une clé</>}
+          </Button>
+        </div>
+
+        {key && (
+          <>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="form-label">Étiquette source <span className="text-muted-foreground">(facultatif)</span></label>
+                <Input value={source} onChange={e => setSource(e.target.value)} placeholder="Landing nextgital.ma" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="form-label">Couleur d'accent</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={color} onChange={e => setColor(e.target.value)}
+                    className="w-10 h-10 rounded-md border border-[var(--surface-card-border)] bg-transparent cursor-pointer" />
+                  <Input value={color} onChange={e => setColor(e.target.value)} className="flex-1" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="form-label">Clé d'atelier (sensible)</label>
+                <button onClick={() => copy(key)}
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  <Copy className="w-3 h-3" /> Copier
+                </button>
+              </div>
+              <code className="block text-xs p-3 rounded-md bg-slate-100 dark:bg-slate-900/40 break-all border border-[var(--surface-card-border)]">
+                {key}
+              </code>
+              <p className="text-xs text-muted-foreground">
+                Conservez-la. N'importe qui ayant cette clé peut soumettre un lead à votre espace
+                (rate-limit : 10/min). Régénérez si elle est compromise.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="form-label">Code à coller sur votre site</label>
+                <button onClick={() => copy(snippet)}
+                  className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  <Copy className="w-3 h-3" /> Copier
+                </button>
+              </div>
+              <pre className="text-xs p-3 rounded-md bg-slate-100 dark:bg-slate-900/40 overflow-x-auto border border-[var(--surface-card-border)] whitespace-pre">
+{snippet}
+              </pre>
+            </div>
+
+            <div className="rounded-lg border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 p-4 text-xs space-y-2">
+              <p className="font-semibold flex items-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5" /> Personnalisation supplémentaire
+              </p>
+              <ul className="space-y-1 text-muted-foreground">
+                <li><code>data-target="#mon-conteneur"</code> — injecter le formulaire dans un élément existant</li>
+                <li><code>data-fields="name,email,phone,company,message"</code> — choisir les champs affichés</li>
+                <li><code>data-heading="Demande de devis"</code> — changer le titre</li>
+                <li><code>data-button-text="Envoyer ma demande"</code> — texte du bouton</li>
+              </ul>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
