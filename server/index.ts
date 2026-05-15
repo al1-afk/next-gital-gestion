@@ -103,6 +103,21 @@ app.get('/health', async (_req, res) => {
   }
 })
 
+/* ── Services diagnostic (public — only reports configured/not, no secrets) ─ */
+app.get('/health/services', (_req, res) => {
+  res.json({
+    nodeEnv:    process.env.NODE_ENV ?? 'unknown',
+    email: {
+      configured: !!process.env.RESEND_API_KEY,
+      from:       process.env.RESEND_FROM ? 'set' : 'missing',
+    },
+    auth: {
+      jwt:        !!process.env.JWT_SECRET,
+      jwtRefresh: !!process.env.JWT_REFRESH_SECRET,
+    },
+  })
+})
+
 /* ── 404 ─────────────────────────────────────────────────────── */
 app.use((_req, res) => res.status(404).json({ error: 'Route introuvable' }))
 

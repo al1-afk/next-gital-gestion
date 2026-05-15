@@ -21,6 +21,10 @@ export async function sendEmail({ to, subject, html, text }: SendOpts): Promise<
   const from   = process.env.RESEND_FROM || 'GestiQ <noreply@101.nextgital.tech>'
 
   if (!apiKey) {
+    const isProd = process.env.NODE_ENV === 'production'
+    if (isProd) {
+      console.error('\n⚠️  [email] RESEND_API_KEY missing in PRODUCTION — emails are NOT being sent. Set it in your server env and restart.\n')
+    }
     console.log(`\n[email:dev] to=${to} subject="${subject}"\n${text ?? html}\n`)
     return
   }
