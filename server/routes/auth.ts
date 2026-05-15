@@ -7,6 +7,7 @@ import {
   requireAuth,
 } from '../middleware/auth'
 import { authLimiter, passwordLimiter } from '../middleware/security'
+import { sendEmail, loginCodeEmail, passwordResetEmail } from '../lib/email'
 
 const router = Router()
 
@@ -161,16 +162,158 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 
     if (!memberRow) return res.status(403).json({ error: 'Accès refusé' })
 
+    /* ── 2FA: issue a 6-digit code instead of tokens ─────────────
+       The access/refresh tokens are NOT created here. The user
+       must POST the emailed code to /api/auth/verify-login to
+       complete the sign-in. */
+
+    /* Invalidate any prior unused codes for this user */
+    await query(
+      `UPDATE login_verification_codes SET used = true
+       WHERE user_id = $1 AND used = false`,
+      [user.id]
+    )
+
+    const code     = String(Math.floor(100000 + Math.random() * 900000))
+    const codeHash = await bcrypt.hash(code, 10)
+
+    await query(
+      `INSERT INTO login_verification_codes
+         (user_id, tenant_id, email, code_hash, expires_at, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '10 minutes', $5::inet, $6)`,
+      [user.id, memberRow.tenant_id, email, codeHash, req.ip ?? '0.0.0.0', req.headers['user-agent'] ?? '']
+    )
+
+    try {
+      const tpl = loginCodeEmail(code)
+      await sendEmail({ to: email, ...tpl })
+    } catch (e: any) {
+      console.error('[login:email]', e?.message ?? e)
+      /* Don't reveal email errors to the client — but still log so the
+         user can ask support. The dev-fallback in email.ts prints the
+         code to the server console, which keeps local dev usable. */
+    }
+
+    res.json({ needsVerification: true, email })
+  } catch (err: any) {
+    console.error('[login]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+/* ── POST /api/auth/verify-login — Finalise sign-in with the code ─ */
+router.post('/verify-login', authLimiter, async (req: Request, res: Response) => {
+  const { email, code, tenantSlug } = req.body
+  if (!email || !code) {
+    return res.status(400).json({ error: 'Email et code requis' })
+  }
+
+  try {
+    const row = await queryOne<{ id: string; user_id: string; tenant_id: string; code_hash: string; attempts: number }>(
+      `SELECT id, user_id, tenant_id, code_hash, attempts FROM login_verification_codes
+       WHERE email = $1 AND used = false AND expires_at > NOW()
+       ORDER BY created_at DESC LIMIT 1`,
+      [email]
+    )
+
+    if (!row) {
+      return res.status(400).json({ error: 'Code invalide ou expiré' })
+    }
+
+    if (row.attempts >= 5) {
+      await query(`UPDATE login_verification_codes SET used = true WHERE id = $1`, [row.id])
+      return res.status(429).json({ error: 'Trop de tentatives. Reconnectez-vous pour recevoir un nouveau code.' })
+    }
+
+    const valid = await bcrypt.compare(String(code), row.code_hash)
+    if (!valid) {
+      await query(
+        `UPDATE login_verification_codes SET attempts = attempts + 1 WHERE id = $1`,
+        [row.id]
+      )
+      return res.status(400).json({ error: 'Code incorrect' })
+    }
+
+    /* Mark code consumed */
+    await query(`UPDATE login_verification_codes SET used = true WHERE id = $1`, [row.id])
+
+    /* Resolve the user + (optional) requested tenant — same logic as /login */
+    const memberRow = tenantSlug
+      ? await queryOne<{ tenant_id: string; role: string; slug: string }>(
+          `SELECT tu.tenant_id, tu.role, t.slug
+           FROM tenant_users tu JOIN tenants t ON t.id = tu.tenant_id
+           WHERE tu.user_id = $1 AND t.slug = $2 AND tu.status = 'active'`,
+          [row.user_id, tenantSlug]
+        )
+      : await queryOne<{ tenant_id: string; role: string; slug: string }>(
+          `SELECT tu.tenant_id, tu.role, t.slug
+           FROM tenant_users tu JOIN tenants t ON t.id = tu.tenant_id
+           WHERE tu.user_id = $1 AND tu.tenant_id = $2 AND tu.status = 'active'
+           LIMIT 1`,
+          [row.user_id, row.tenant_id]
+        )
+
+    if (!memberRow) return res.status(403).json({ error: 'Accès refusé' })
+
     const { accessToken, tenantSlug: s } = await issueTokenPair(
       res,
-      { id: user.id, email, role: memberRow.role, tenant_id: memberRow.tenant_id, slug: memberRow.slug },
+      { id: row.user_id, email, role: memberRow.role, tenant_id: memberRow.tenant_id, slug: memberRow.slug },
       req.ip ?? '',
       req.headers['user-agent'] ?? '',
     )
 
     res.json({ token: accessToken, tenantSlug: s, tenantId: memberRow.tenant_id, role: memberRow.role })
   } catch (err: any) {
-    console.error('[login]', err.message)
+    console.error('[verify-login]', err.message)
+    res.status(500).json({ error: 'Erreur serveur' })
+  }
+})
+
+/* ── POST /api/auth/resend-login-code — Re-issue a code ─────────── */
+router.post('/resend-login-code', authLimiter, async (req: Request, res: Response) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'Email requis' })
+
+  try {
+    /* Must have a recent (within 30 min) pending code — prevents
+       cold-start abuse of this endpoint without a real login attempt. */
+    const recent = await queryOne<{ user_id: string; tenant_id: string }>(
+      `SELECT user_id, tenant_id FROM login_verification_codes
+       WHERE email = $1 AND created_at > NOW() - INTERVAL '30 minutes'
+       ORDER BY created_at DESC LIMIT 1`,
+      [email]
+    )
+    if (!recent) {
+      /* Same opaque success as forgot-password to avoid enumeration */
+      return res.json({ success: true })
+    }
+
+    await query(
+      `UPDATE login_verification_codes SET used = true
+       WHERE user_id = $1 AND used = false`,
+      [recent.user_id]
+    )
+
+    const code     = String(Math.floor(100000 + Math.random() * 900000))
+    const codeHash = await bcrypt.hash(code, 10)
+
+    await query(
+      `INSERT INTO login_verification_codes
+         (user_id, tenant_id, email, code_hash, expires_at, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '10 minutes', $5::inet, $6)`,
+      [recent.user_id, recent.tenant_id, email, codeHash, req.ip ?? '0.0.0.0', req.headers['user-agent'] ?? '']
+    )
+
+    try {
+      const tpl = loginCodeEmail(code)
+      await sendEmail({ to: email, ...tpl })
+    } catch (e: any) {
+      console.error('[resend-login-code:email]', e?.message ?? e)
+    }
+
+    res.json({ success: true })
+  } catch (err: any) {
+    console.error('[resend-login-code]', err.message)
     res.status(500).json({ error: 'Erreur serveur' })
   }
 })
@@ -208,8 +351,12 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
       [user.id, email, codeHash, req.ip ?? '0.0.0.0']
     )
 
-    /* Dev mode — log the code. Replace with real email sender later. */
-    console.log(`\n[password-reset] Code for ${email}: ${code} (expires in 10 min)\n`)
+    try {
+      const tpl = passwordResetEmail(code)
+      await sendEmail({ to: email, ...tpl })
+    } catch (e: any) {
+      console.error('[forgot-password:email]', e?.message ?? e)
+    }
 
     res.json({ success: true })
   } catch (err: any) {

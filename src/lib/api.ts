@@ -93,10 +93,21 @@ export const api = {
 
 /* ── Auth API ────────────────────────────────────────────────── */
 export const authApi = {
+  /* Step 1: validate password — server emails a 6-digit code and returns
+     { needsVerification: true, email }. Tokens are NOT issued here. */
   login: (email: string, password: string, tenantSlug?: string) =>
-    api.publicPost<{ token: string; tenantSlug: string; tenantId: string; role: string }>(
+    api.publicPost<{ needsVerification: true; email: string }>(
       '/api/auth/login', { email, password, tenantSlug }
     ),
+
+  /* Step 2: submit the emailed code → tokens issued. */
+  verifyLogin: (email: string, code: string, tenantSlug?: string) =>
+    api.publicPost<{ token: string; tenantSlug: string; tenantId: string; role: string }>(
+      '/api/auth/verify-login', { email, code, tenantSlug }
+    ),
+
+  resendLoginCode: (email: string) =>
+    api.publicPost<{ success: boolean }>('/api/auth/resend-login-code', { email }),
 
   register: (data: { email: string; password: string; name: string; tenantSlug: string; tenantName: string }) =>
     api.publicPost<{ token: string; tenantSlug: string; tenantId: string }>(

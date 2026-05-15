@@ -1,20 +1,35 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, EyeOff, Lock, Mail, ArrowRight, Loader2, X, KeyRound, CheckCircle } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, ArrowRight, Loader2, X, KeyRound, CheckCircle, ShieldCheck, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { authApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
+type AuthStage = 'credentials' | 'verify'
+
 export default function Auth() {
-  const { isAuthorized, signIn } = useAuth()
+  const { isAuthorized, signIn, verifyLogin, resendLoginCode } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
+
+  /* 2FA-on-login state */
+  const [stage,   setStage]   = useState<AuthStage>('credentials')
+  const [code,    setCode]    = useState('')
+  const [resendIn, setResendIn] = useState(0)
+  const [resending, setResending] = useState(false)
+
+  /* Countdown for the "Renvoyer le code" link */
+  useEffect(() => {
+    if (resendIn <= 0) return
+    const t = setTimeout(() => setResendIn(v => v - 1), 1000)
+    return () => clearTimeout(t)
+  }, [resendIn])
 
   if (isAuthorized) {
     const slug = sessionStorage.getItem('gestiq_tenant_slug') ?? 'demo'
@@ -27,11 +42,47 @@ export default function Auth() {
     setLoading(true)
     try {
       await signIn(email, password)
+      setStage('verify')
+      setCode('')
+      setResendIn(30)
     } catch (err: any) {
       setError(err.message || 'Identifiants incorrects')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    try {
+      await verifyLogin(email, code.trim())
+    } catch (err: any) {
+      setError(err.message || 'Code incorrect')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    if (resendIn > 0 || resending) return
+    setResending(true)
+    setError(null)
+    try {
+      await resendLoginCode(email)
+      setResendIn(30)
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors du renvoi')
+    } finally {
+      setResending(false)
+    }
+  }
+
+  const backToCredentials = () => {
+    setStage('credentials')
+    setCode('')
+    setError(null)
   }
 
   return (
@@ -54,12 +105,33 @@ export default function Auth() {
           {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center mb-4 shadow-lg shadow-blue-600/30">
-              <span className="text-white font-bold text-2xl">N</span>
+              {stage === 'verify'
+                ? <ShieldCheck className="w-7 h-7 text-white" />
+                : <span className="text-white font-bold text-2xl">N</span>}
             </div>
-            <h1 className="text-2xl font-bold text-white">GestiQ CRM</h1>
-            <p className="text-slate-400 text-sm mt-1">Connectez-vous à votre espace</p>
+            <h1 className="text-2xl font-bold text-white">
+              {stage === 'verify' ? 'Confirmation' : 'GestiQ CRM'}
+            </h1>
+            <p className="text-slate-400 text-sm mt-1 text-center">
+              {stage === 'verify'
+                ? <>Code envoyé à <span className="text-blue-400 font-medium">{email}</span></>
+                : 'Connectez-vous à votre espace'}
+            </p>
           </div>
 
+          {stage === 'verify' ? (
+            <VerifyStep
+              code={code}
+              setCode={setCode}
+              loading={loading}
+              error={error}
+              resendIn={resendIn}
+              resending={resending}
+              onSubmit={handleVerify}
+              onResend={handleResend}
+              onBack={backToCredentials}
+            />
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Email */}
             <div className="space-y-1.5">
@@ -139,6 +211,7 @@ export default function Auth() {
               </button>
             </div>
           </form>
+          )}
 
           <p className="text-center text-xs text-slate-600 mt-6">
             Accès restreint — Espace privé GestiQ
@@ -152,6 +225,99 @@ export default function Auth() {
         initialEmail={email}
       />
     </div>
+  )
+}
+
+/* ── Verify step — 6-digit code received by email ───────────────── */
+function VerifyStep({
+  code, setCode, loading, error, resendIn, resending,
+  onSubmit, onResend, onBack,
+}: {
+  code:      string
+  setCode:   (v: string) => void
+  loading:   boolean
+  error:     string | null
+  resendIn:  number
+  resending: boolean
+  onSubmit:  (e: React.FormEvent) => void
+  onResend:  () => void
+  onBack:    () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-slate-300">Code de vérification</label>
+        <div className="relative">
+          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="123456"
+            maxLength={6}
+            className="pl-9 bg-slate-800/60 border-slate-700 text-white placeholder:text-slate-500 focus-visible:border-blue-500 text-center tracking-[0.5em] font-mono text-lg"
+            required
+          />
+        </div>
+        <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+          Entrez le code à 6 chiffres reçu par email. Il expire dans 10 minutes.
+        </p>
+      </div>
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400"
+        >
+          {error}
+        </motion.div>
+      )}
+
+      <Button
+        type="submit"
+        disabled={loading || code.length !== 6}
+        className="w-full h-11 text-base mt-2 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white shadow-lg shadow-blue-600/30 border-0"
+      >
+        {loading ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (
+          <>
+            Vérifier
+            <CheckCircle className="w-4 h-4" />
+          </>
+        )}
+      </Button>
+
+      <div className="flex items-center justify-between pt-2 text-sm">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Retour
+        </button>
+        {resendIn > 0 ? (
+          <span className="text-slate-500">Renvoi possible dans {resendIn}s</span>
+        ) : (
+          <button
+            type="button"
+            onClick={onResend}
+            disabled={resending}
+            className="text-blue-400 hover:text-blue-300 hover:underline transition-colors disabled:opacity-50"
+          >
+            {resending ? 'Envoi…' : 'Renvoyer le code'}
+          </button>
+        )}
+      </div>
+    </form>
   )
 }
 

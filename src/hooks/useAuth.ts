@@ -73,20 +73,29 @@ export function useAuth() {
       })
   }, [])
 
+  /* Step 1 — validate password. Returns { needsVerification, email }.
+     Tokens are NOT issued here; the caller must follow up with
+     verifyLogin() once the user enters the emailed code. */
   const signIn = useCallback(async (
     email:       string,
     password:    string,
     tenantSlug?: string,
   ) => {
-    /* Always purge any leftover state from a previous user BEFORE
-       writing the new token — prevents cross-user data leakage. */
+    /* Purge leftover state from any previous user before we start
+       a new auth flow — prevents cross-user cache leakage. */
     await purgeClientSession()
+    return authApi.login(email, password, tenantSlug)
+  }, [])
 
-    const data = await authApi.login(email, password, tenantSlug)
+  /* Step 2 — submit the emailed code, receive tokens, finalise. */
+  const verifyLogin = useCallback(async (
+    email:       string,
+    code:        string,
+    tenantSlug?: string,
+  ) => {
+    const data = await authApi.verifyLogin(email, code, tenantSlug)
     tokenStore.set(data.token)
     const payload = parseJwt(data.token)
-    /* Best-effort fetch of allowed_modules so sidebar reflects perms
-       without a refresh. If /me fails we just default to null. */
     let allowedModules: string[] | null = null
     try {
       const me = await authApi.me()
@@ -107,11 +116,15 @@ export function useAuth() {
     return data
   }, [navigate])
 
+  const resendLoginCode = useCallback((email: string) =>
+    authApi.resendLoginCode(email)
+  , [])
+
   const signOut = useCallback(async () => {
     await logoutAndPurge()
     setState({ ...INITIAL, loading: false })
     navigate('/auth', { replace: true })
   }, [navigate])
 
-  return { ...state, signIn, signOut }
+  return { ...state, signIn, verifyLogin, resendLoginCode, signOut }
 }
