@@ -271,7 +271,7 @@ function DescriptionEditor({
   return (
     <div className="rounded-lg border border-border overflow-hidden focus-within:border-blue-600/60 focus-within:ring-1 focus-within:ring-blue-600/20 transition-colors">
       {/* Toolbar */}
-      <div className="flex items-center flex-wrap gap-0.5 px-2 py-1.5 bg-muted/30 border-b border-border">
+      <div className="flex items-center flex-nowrap gap-0.5 px-2 py-1.5 bg-muted/30 border-b border-border overflow-x-auto">
         {groups.map((group, gi) => (
           <span key={gi} className="flex items-center gap-0.5">
             {gi > 0 && <span className="w-px h-4 bg-border mx-1 inline-block flex-shrink-0" />}
@@ -376,7 +376,7 @@ function PrestationRow({
             >
               <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${showQty ? 'translate-x-3' : 'translate-x-0'}`} />
             </button>
-            <label className="form-label leading-none">Quantité</label>
+            <label className="form-label leading-none whitespace-nowrap">Quantité</label>
           </div>
           <Input
             type="number"
@@ -400,7 +400,7 @@ function PrestationRow({
             >
               <span className={`pointer-events-none inline-block h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${showPrix ? 'translate-x-3' : 'translate-x-0'}`} />
             </button>
-            <label className="form-label leading-none">Prix unitaire HT (DH) *</label>
+            <label className="form-label leading-none whitespace-nowrap truncate">Prix unitaire HT (DH) *</label>
           </div>
           <Input
             type="number"
