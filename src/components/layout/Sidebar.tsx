@@ -7,6 +7,7 @@ import {
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
   Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target, Sparkles,
+  BookOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
@@ -53,6 +54,7 @@ export const ALL_MODULES: { key: string; label: string }[] = [
   { key: 'automatisations',   label: 'Automatisations' },
   { key: 'integrations',      label: 'Intégrations' },
   { key: 'rapports',          label: 'Rapports & Export' },
+  { key: 'sop',               label: 'SOP & Procédures' },
   { key: 'bientot',           label: 'Bientôt' },
 ]
 
@@ -109,6 +111,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Automatisations',    href: '/automatisations',  icon: Zap,     badge: 'Auto', module: 'automatisations' },
       { label: 'Intégrations',       href: '/integrations',     icon: PlugZap, module: 'integrations' },
       { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown, module: 'rapports' },
+      { label: 'SOP & Procédures',   href: '/sop',              icon: BookOpen, badge: 'New', module: 'sop' },
       { label: 'Bientôt',            href: '/bientot',          icon: Rocket,  badge: 'Soon', module: 'bientot' },
     ],
   },

@@ -44,6 +44,7 @@ const Automatisations     = lazy(() => import('@/pages/Automatisations'))
 const AbonnementsClients  = lazy(() => import('@/pages/AbonnementsClients'))
 const Integrations        = lazy(() => import('@/pages/Integrations'))
 const Rapports            = lazy(() => import('@/pages/Rapports'))
+const SOP                 = lazy(() => import('@/pages/SOP'))
 const Landing             = lazy(() => import('@/pages/Landing'))
 const ComingSoon          = lazy(() => import('@/pages/ComingSoon'))
 
@@ -114,6 +115,7 @@ export default function App() {
               <Route path="parametres"                 element={<Parametres />} />
               <Route path="automatisations"            element={<Automatisations />} />
               <Route path="rapports"                   element={<Rapports />} />
+              <Route path="sop"                        element={<SOP />} />
               <Route path="bientot"                    element={<ComingSoon />} />
               <Route path="*"                          element={<Navigate to="" replace />} />
             </Route>
