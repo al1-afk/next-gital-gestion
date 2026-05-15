@@ -328,7 +328,6 @@ interface SavedPrestation {
   description:  string
   prix_ht:      number
   tva:          number
-  type:         'produit' | 'service'
   unite:        string
 }
 
@@ -412,7 +411,6 @@ export function PrestationRow({
       description: desc,
       prix_ht:     p.prix_unitaire,
       tva:         20,
-      type:        'service',
       unite:       'projet',
     })
   }
