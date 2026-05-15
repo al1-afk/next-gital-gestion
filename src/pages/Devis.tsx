@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import DOMPurify from 'dompurify'
 import {
@@ -9,10 +10,12 @@ import {
   AlignLeft, List as ListIcon, Receipt,
   Bold, Italic, Underline, AlignCenter, AlignRight,
   ListOrdered, IndentIncrease, IndentDecrease, Eraser, Strikethrough,
+  BookMarked, Save, Package,
 } from 'lucide-react'
 import { useDevis, useCreateDevis, useUpdateDevis, useDeleteDevis, type Devis } from '@/hooks/useDevis'
 import { useClients, useCreateClient, type Client } from '@/hooks/useClients'
 import { useCreateFacture, useFactures } from '@/hooks/useFactures'
+import { produitsApi } from '@/lib/api'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Badge }   from '@/components/ui/badge'
@@ -318,6 +321,17 @@ export function DescriptionEditor({
   )
 }
 
+/* ─── Saved prestation (Produit) type ──────────────────────────────── */
+interface SavedPrestation {
+  id:           string
+  nom:          string
+  description:  string
+  prix_ht:      number
+  tva:          number
+  type:         'produit' | 'service'
+  unite:        string
+}
+
 /* ─── Prestation row ──────────────────────────────────────────────── */
 export function PrestationRow({
   p, onChange, onDelete,
@@ -330,6 +344,79 @@ export function PrestationRow({
   const showPrix = p.showPrixUnit ?? true
   const total    = showQty ? p.quantite * p.prix_unitaire : p.prix_unitaire
 
+  /* ── Saved prestations library ── */
+  const qc = useQueryClient()
+  const { data: savedList = [] } = useQuery<SavedPrestation[]>({
+    queryKey: ['produits'],
+    queryFn:  () => produitsApi.list({ orderBy: 'nom', order: 'asc' }) as Promise<SavedPrestation[]>,
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (data: Omit<SavedPrestation, 'id'>) => produitsApi.create(data) as Promise<SavedPrestation>,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['produits'] })
+      toast.success('Prestation enregistrée')
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Erreur lors de l\'enregistrement'),
+  })
+
+  const [libOpen,    setLibOpen]    = useState(false)
+  const [librarySearch, setLibrarySearch] = useState('')
+  const libRef = useRef<HTMLDivElement>(null)
+
+  /* Close picker on outside click */
+  useEffect(() => {
+    if (!libOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (libRef.current && !libRef.current.contains(e.target as Node)) setLibOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [libOpen])
+
+  const filteredSaved = useMemo(() => {
+    const q = librarySearch.trim().toLowerCase()
+    if (!q) return savedList
+    return savedList.filter(s =>
+      s.nom.toLowerCase().includes(q) ||
+      (s.description ?? '').toLowerCase().includes(q)
+    )
+  }, [savedList, librarySearch])
+
+  const applySaved = (s: SavedPrestation) => {
+    onChange(p.id, 'titre',         s.nom)
+    onChange(p.id, 'prix_unitaire', s.prix_ht)
+    /* Convert the produit's plain-text description to a paragraph
+       block — preserves what the user wrote in the catalog. */
+    onChange(p.id, 'description', s.description
+      ? [{ id: String(Date.now()), type: 'paragraph', content: s.description }]
+      : []
+    )
+    setLibOpen(false)
+    setLibrarySearch('')
+  }
+
+  const saveCurrent = () => {
+    if (!p.titre.trim()) {
+      toast.error('Donnez un titre avant d\'enregistrer')
+      return
+    }
+    /* Strip HTML from description blocks for plain-text storage */
+    const desc = p.description
+      .map(b => b.content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n')
+    saveMutation.mutate({
+      nom:         p.titre.trim(),
+      description: desc,
+      prix_ht:     p.prix_unitaire,
+      tva:         20,
+      type:        'service',
+      unite:       'projet',
+    })
+  }
+
   return (
     <motion.div
       layout
@@ -338,16 +425,95 @@ export function PrestationRow({
       exit={{ opacity: 0, x: -16 }}
       className="rounded-xl border border-border bg-muted/20 p-4 space-y-3"
     >
-      {/* Titre */}
+      {/* Titre + library + save */}
       <div className="flex items-start gap-2">
-        <div className="flex-1">
+        <div className="flex-1 relative" ref={libRef}>
           <Input
             value={p.titre}
             onChange={e => onChange(p.id, 'titre', e.target.value)}
             placeholder="Titre de la prestation..."
-            className="text-sm font-medium"
+            className="text-sm font-medium pr-9"
           />
+          {/* Library picker trigger inside input */}
+          <button
+            type="button"
+            onClick={() => setLibOpen(v => !v)}
+            title={savedList.length > 0
+              ? `Choisir parmi ${savedList.length} prestation(s) enregistrée(s)`
+              : 'Aucune prestation enregistrée pour le moment'}
+            className={`absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+              libOpen
+                ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                : 'text-muted-foreground hover:bg-muted hover:text-blue-600'
+            }`}
+          >
+            <BookMarked className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Picker dropdown */}
+          {libOpen && (
+            <div className="absolute z-30 top-full left-0 right-0 mt-1.5 rounded-xl border border-border bg-popover shadow-lg overflow-hidden">
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    value={librarySearch}
+                    onChange={e => setLibrarySearch(e.target.value)}
+                    placeholder="Rechercher une prestation..."
+                    className="pl-8 h-8 text-xs"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                {filteredSaved.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                    <Package className="w-5 h-5 mx-auto mb-1.5 opacity-40" />
+                    {savedList.length === 0
+                      ? 'Aucune prestation enregistrée. Créez-en une via le bouton 💾'
+                      : 'Aucun résultat'}
+                  </div>
+                ) : (
+                  filteredSaved.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => applySaved(s)}
+                      className="w-full flex items-start gap-2.5 px-3 py-2 text-left hover:bg-muted/60 transition-colors group"
+                    >
+                      <div className="w-7 h-7 rounded-md bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Package className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{s.nom}</p>
+                        {s.description && (
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{s.description}</p>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-mono font-semibold text-foreground flex-shrink-0 mt-0.5">
+                        {s.prix_ht.toLocaleString('fr-FR')} MAD
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Save current as library entry */}
+        <button
+          type="button"
+          onClick={saveCurrent}
+          disabled={!p.titre.trim() || saveMutation.isPending}
+          title="Enregistrer cette prestation dans la bibliothèque"
+          className="w-8 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors flex-shrink-0 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+        >
+          {saveMutation.isPending
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Save className="w-4 h-4" />}
+        </button>
+
         <button
           onClick={() => onDelete(p.id)}
           className="w-8 h-9 flex items-center justify-center rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0"
