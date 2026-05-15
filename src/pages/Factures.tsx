@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Search, Download, Receipt, Loader2, Edit2, Trash2, CheckCircle,
   Eye, MoreHorizontal, Copy, Send, AlertTriangle, Clock, X,
   CreditCard, Calendar, FileText, MailOpen,
+  ChevronLeft, ChevronRight, Check, Phone, Mail, MapPin,
+  PenLine, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import {
   useFactures, useCreateFacture, useUpdateFacture, useDeleteFacture,
@@ -11,8 +13,7 @@ import {
   computeAutoStatut,
   type Facture, type FactureStatut,
 } from '@/hooks/useFactures'
-import { useClients }     from '@/hooks/useClients'
-import { useStockProducts, useCreateStockMovement } from '@/hooks/useStock'
+import { useClients, useCreateClient }     from '@/hooks/useClients'
 import { Button }         from '@/components/ui/button'
 import { Input }          from '@/components/ui/input'
 import { Badge }          from '@/components/ui/badge'
@@ -26,13 +27,20 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatCurrency, formatCurrencyCompact, formatDate, useIsMobileViewport } from '@/lib/utils'
+import { formatCurrency, formatCurrencyCompact, formatDate, getInitials, useIsMobileViewport } from '@/lib/utils'
 import { generateFacturePDF } from '@/lib/generatePdf'
 import { ImportExportButtons } from '@/components/ImportExportButtons'
 import { facturesSchema } from '@/lib/importExportSchemas'
 import {
   DateRangeFilter, DEFAULT_RANGE, makeDatePredicate, type DateRange,
 } from '@/components/ui/DateRangeFilter'
+import {
+  PrestationRow, A4Preview, StepBar,
+  parseDevisNotes, DEFAULT_BANK,
+  type Prestation, type BankInfo, type DescriptionBlock,
+} from '@/pages/Devis'
+import FactureTemplate from '@/components/facture/FactureTemplate'
+import { toast } from 'sonner'
 
 /* ─── Status config ──────────────────────────────────────────────── */
 type BadgeVariant = 'success' | 'warning' | 'destructive' | 'default' | 'secondary' | 'outline'
@@ -366,246 +374,602 @@ function FactureDetailModal({
   )
 }
 
-/* ─── FactureForm ────────────────────────────────────────────────── */
-function FactureForm({ facture, onClose }: { facture?: Facture; onClose: () => void }) {
-  const create = useCreateFacture()
-  const update = useUpdateFacture()
-  const { data: clients = [] } = useClients()
-  const { data: stockProducts = [] } = useStockProducts('')
-  const createMovement = useCreateStockMovement()
+/* ═══════════════════════════════════════════════════════════════════
+   FactureWizard — Two-step creation flow mirroring the Devis wizard
+   Step 1 : Client picker + dates (modal-size dialog)
+   Step 2 : Full-screen prestations editor + live A4 preview
+   ═══════════════════════════════════════════════════════════════════ */
+function FactureWizard({
+  facture, onClose, onStepChange,
+}: {
+  facture?:      Facture
+  onClose:       () => void
+  onStepChange?: (step: number) => void
+}) {
+  const create        = useCreateFacture()
+  const update        = useUpdateFacture()
+  const createClient  = useCreateClient()
+  const { data: clients   = [] } = useClients()
+  const { data: allFactures = [] } = useFactures()
 
-  /* Optional stock-product link — off by default, only for new factures */
-  const [stockLink, setStockLink] = useState<{ product_id: string; quantite: number }>({
-    product_id: '',
-    quantite:   1,
+  const today  = new Date().toISOString().slice(0, 10)
+  const plus30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10)
+
+  /* ── Wizard state ── */
+  const [step,         setStep]         = useState(facture ? 2 : 1)
+  useEffect(() => { onStepChange?.(step) }, [step]) // eslint-disable-line
+  const [clientSearch, setClientSearch] = useState('')
+  const [selectedId,   setSelectedId]   = useState(facture?.client_id ?? '')
+  const [dateFacture,  setDateFacture]  = useState(facture?.date_emission ?? today)
+  const [dateEcheance, setDateEcheance] = useState(facture?.date_echeance ?? plus30)
+
+  const [prestations,  setPrestations]  = useState<Prestation[]>(() => {
+    if (!facture?.notes) return [{ id: '1', titre: '', description: [], quantite: 1, prix_unitaire: 0 }]
+    const { prestations: p } = parseDevisNotes(facture.notes)
+    return p.length
+      ? p.map((x, i) => ({ ...x, id: String(i + 1) })) as Prestation[]
+      : [{ id: '1', titre: '', description: [], quantite: 1, prix_unitaire: 0 }]
   })
 
-  const [form, setForm] = useState<{
-    numero:        string
-    client_id:     string
-    statut:        FactureStatut
-    date_emission: string
-    date_echeance: string
-    montant_ht:    number
-    tva:           number
-    montant_ttc:   number
-    montant_paye:  number
-    notes:         string
-  }>({
-    numero:        facture?.numero        || `FAC-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`,
-    client_id:     facture?.client_id     || '',
-    statut:        facture?.statut        || 'brouillon',
-    date_emission: facture?.date_emission || new Date().toISOString().slice(0, 10),
-    date_echeance: facture?.date_echeance || '',
-    montant_ht:    facture?.montant_ht    || 0,
-    tva:           facture?.tva           || 20,
-    montant_ttc:   facture?.montant_ttc   || 0,
-    montant_paye:  facture?.montant_paye  || 0,
-    notes:         facture?.notes         || '',
+  const [tvaEnabled, setTvaEnabled] = useState(() => facture ? facture.tva > 0 : true)
+  const [tvaRate,    setTvaRate]    = useState(() => (facture?.tva ?? 0) > 0 ? facture!.tva : 20)
+
+  const [bankInfo,  setBankInfo]  = useState<BankInfo>(() =>
+    facture?.notes ? parseDevisNotes(facture.notes).bankInfo : DEFAULT_BANK
+  )
+  const [conditions, setConditions] = useState<string[]>(() => {
+    if (!facture?.notes) return ['Règlement à 30 jours fin de mois']
+    const { conditions: c } = parseDevisNotes(facture.notes)
+    return c.length ? c : ['Règlement à 30 jours fin de mois']
   })
+  const [newCondition, setNewCondition] = useState('')
 
-  const setHT = (ht: number) => {
-    const ttc = ht * (1 + form.tva / 100)
-    const newStatut = computeAutoStatut(form.montant_paye, ttc, form.statut)
-    setForm(p => ({ ...p, montant_ht: ht, montant_ttc: ttc, statut: newStatut }))
-  }
+  const [signature, setSignature] = useState<string | null>(() => {
+    try { return localStorage.getItem('ng_signature') ?? null } catch { return null }
+  })
+  useEffect(() => {
+    try {
+      if (signature) localStorage.setItem('ng_signature', signature)
+      else localStorage.removeItem('ng_signature')
+    } catch {}
+  }, [signature])
 
-  const setTVA = (tva: number) => {
-    const ttc = form.montant_ht * (1 + tva / 100)
-    const newStatut = computeAutoStatut(form.montant_paye, ttc, form.statut)
-    setForm(p => ({ ...p, tva, montant_ttc: ttc, statut: newStatut }))
-  }
+  const previewRef = useRef<HTMLDivElement>(null)
 
-  const setPaye = (paye: number) => {
-    const newStatut = computeAutoStatut(paye, form.montant_ttc, form.statut)
-    setForm(p => ({ ...p, montant_paye: paye, statut: newStatut }))
-  }
-
-  /* When a stock product is selected, prefill HT (= prix_vente × qty) + TVA */
-  const applyStockProduct = (productId: string, qty: number) => {
-    setStockLink({ product_id: productId, quantite: qty })
-    if (!productId) return
-    const p = stockProducts.find(sp => sp.id === productId)
-    if (!p) return
-    const ht  = Number(p.prix_vente) * Math.max(0, qty)
-    const tva = Number(p.tva)
-    const ttc = ht * (1 + tva / 100)
-    const newStatut = computeAutoStatut(form.montant_paye, ttc, form.statut)
-    setForm(prev => ({ ...prev, montant_ht: ht, tva, montant_ttc: ttc, statut: newStatut }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  /* ── Resizable left panel ── */
+  const [panelWidth, setPanelWidth] = useState(340)
+  const isResizing = useRef(false)
+  const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
-    const payload = {
-      ...form,
-      date_echeance: form.date_echeance || null,
-      notes:         form.notes         || null,
-      client_id:     form.client_id     || null,
+    isResizing.current = true
+    const startX = e.clientX
+    const startW = panelWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return
+      const newW = Math.min(600, Math.max(240, startW + ev.clientX - startX))
+      setPanelWidth(newW)
     }
-    let created: Facture | null = null
-    if (facture) {
-      await update.mutateAsync({ id: facture.id, ...payload })
-    } else {
-      created = (await create.mutateAsync(payload as any)) as unknown as Facture
+    const onUp = () => {
+      isResizing.current = false
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
-
-    /* Optional stock decrement — only on NEW factures with a linked product */
-    if (!facture && created?.id && stockLink.product_id && stockLink.quantite > 0) {
-      try {
-        await createMovement.mutateAsync({
-          product_id: stockLink.product_id,
-          type:       'sortie',
-          quantite:   stockLink.quantite,
-          reference:  form.numero,
-          note:       `Décrément auto — facture ${form.numero}`,
-          source:     'facture',
-          source_id:  created.id,
-        })
-      } catch {
-        /* Silent — the facture itself is already saved. Toast shown by hook. */
-      }
-    }
-
-    onClose()
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
   }
 
-  const isPending = create.isPending || update.isPending
+  /* ── Mobile edit/preview tab ── */
+  const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit')
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="form-label">Numéro</label>
-          <Input value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} required />
-        </div>
-        <div className="space-y-1.5">
-          <label className="form-label">Client</label>
-          <Select value={form.client_id} onValueChange={v => setForm(p => ({ ...p, client_id: v }))}>
-            <SelectTrigger><SelectValue placeholder="Sélectionner un client…" /></SelectTrigger>
-            <SelectContent>
-              {clients.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.nom}{c.entreprise ? ` — ${c.entreprise}` : ''}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+  /* ── New client inline form ── */
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [newClientForm, setNewClientForm] = useState({ nom: '', telephone: '', email: '', entreprise: '' })
 
-        <div className="space-y-1.5">
-          <label className="form-label">Date d'émission</label>
-          <Input type="date" value={form.date_emission}
-            onChange={e => setForm(p => ({ ...p, date_emission: e.target.value }))} required />
-        </div>
-        <div className="space-y-1.5">
-          <label className="form-label">Date d'échéance</label>
-          <Input type="date" value={form.date_echeance}
-            onChange={e => setForm(p => ({ ...p, date_echeance: e.target.value }))} />
-        </div>
+  const client = clients.find(c => c.id === selectedId)
 
-        <div className="space-y-1.5">
-          <label className="form-label">Montant HT (MAD)</label>
-          <Input type="number" step="0.01" min="0" value={form.montant_ht}
-            onChange={e => setHT(+e.target.value)} required />
-        </div>
-        <div className="space-y-1.5">
-          <label className="form-label">TVA (%)</label>
-          <Select value={String(form.tva)} onValueChange={v => setTVA(+v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {['0', '7', '10', '14', '20'].map(v => (
-                <SelectItem key={v} value={v}>{v}%</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+  const filteredClients = useMemo(() =>
+    clients.filter(c =>
+      !clientSearch ||
+      c.nom.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      (c.telephone ?? '').includes(clientSearch) ||
+      (c.entreprise ?? '').toLowerCase().includes(clientSearch.toLowerCase())
+    )
+  , [clients, clientSearch])
 
-        <div className="space-y-1.5">
-          <label className="form-label">Montant TTC (calculé)</label>
-          <Input value={form.montant_ttc.toFixed(2)} readOnly
-            className="bg-muted opacity-70 cursor-not-allowed" />
-        </div>
-        <div className="space-y-1.5">
-          <label className="form-label">Montant payé (MAD)</label>
-          <Input type="number" step="0.01" min="0" max={form.montant_ttc}
-            value={form.montant_paye}
-            onChange={e => setPaye(+e.target.value)} />
-        </div>
+  /* ── Calculations ── */
+  const montantHT  = prestations.reduce((s, p) =>
+    s + ((p.showQuantite ?? true) ? p.quantite * p.prix_unitaire : p.prix_unitaire), 0
+  )
+  const montantTVA = tvaEnabled ? montantHT * (tvaRate / 100) : 0
+  const montantTTC = montantHT + montantTVA
 
-        <div className="space-y-1.5 col-span-2">
-          <label className="form-label">
-            Statut
-            <span className="ml-2 text-xs text-muted-foreground font-normal">
-              (calculé automatiquement à partir du montant payé)
+  /* ── Prestation helpers ── */
+  const addPrestation = () =>
+    setPrestations(p => [...p, { id: Date.now().toString(), titre: '', description: [], quantite: 1, prix_unitaire: 0 }])
+
+  const updatePrestation = (id: string, field: keyof Prestation, val: string | number | DescriptionBlock[]) =>
+    setPrestations(p => p.map(x => x.id === id ? { ...x, [field]: val } : x))
+
+  const deletePrestation = (id: string) =>
+    setPrestations(p => p.filter(x => x.id !== id))
+
+  /* ── New client save ── */
+  const saveNewClient = () => {
+    if (!newClientForm.nom.trim()) return
+    createClient.mutate(
+      { nom: newClientForm.nom, telephone: newClientForm.telephone || null,
+        email: newClientForm.email || null, entreprise: newClientForm.entreprise || null,
+        adresse: null, ville: null, pays: 'Maroc', notes: null },
+      {
+        onSuccess: (c: any) => {
+          setSelectedId(c.id)
+          setShowNewClient(false)
+          setNewClientForm({ nom: '', telephone: '', email: '', entreprise: '' })
+        },
+      }
+    )
+  }
+
+  /* ── Final submit ── */
+  const handleSubmit = () => {
+    if (!selectedId) { toast.error('Sélectionnez un client'); setStep(1); return }
+    const notesData = {
+      prestations: prestations.map(({ id: _id, ...p }) => p),
+      conditions,
+      bankInfo,
+      signature,
+    }
+    const notes = JSON.stringify(notesData)
+
+    /* Sequential numero: FAC-YYYY-001, FAC-YYYY-002… (no collision) */
+    const year   = new Date().getFullYear()
+    const maxSeq = allFactures
+      .filter(x => x.numero.startsWith(`FAC-${year}-`))
+      .reduce((max, x) => {
+        const m = x.numero.match(/FAC-\d{4}-(\d+)/)
+        return m ? Math.max(max, parseInt(m[1], 10)) : max
+      }, 0)
+    const newNumero = `FAC-${year}-${String(maxSeq + 1).padStart(3, '0')}`
+
+    const statut: FactureStatut = facture?.statut
+      ?? computeAutoStatut(facture?.montant_paye ?? 0, montantTTC, 'brouillon')
+
+    const payload = {
+      numero:        facture?.numero ?? newNumero,
+      client_id:     selectedId,
+      statut,
+      date_emission: dateFacture,
+      date_echeance: dateEcheance || null,
+      montant_ht:    montantHT,
+      tva:           tvaEnabled ? tvaRate : 0,
+      montant_ttc:   montantTTC,
+      montant_paye:  facture?.montant_paye ?? 0,
+      notes,
+    }
+
+    if (facture) {
+      update.mutate({ id: facture.id, ...payload }, { onSuccess: onClose })
+    } else {
+      create.mutate(payload as any, { onSuccess: onClose })
+    }
+  }
+
+  const busy = create.isPending || update.isPending || createClient.isPending
+
+  /* ══════════════════════════════════════════════
+     STEP 2 — LIVE A4 PREVIEW + EDITOR
+  ══════════════════════════════════════════════ */
+  if (step === 2) {
+    const previewFacture: Facture = {
+      id:            facture?.id ?? 'preview',
+      created_at:    new Date().toISOString(),
+      numero:        facture?.numero ?? `FAC-${new Date().getFullYear()}-XXXX`,
+      client_id:     selectedId,
+      client_nom:    client?.entreprise ?? client?.nom,
+      statut:        facture?.statut ?? 'brouillon',
+      date_emission: dateFacture,
+      date_echeance: dateEcheance || null,
+      montant_ht:    montantHT,
+      tva:           tvaEnabled ? tvaRate : 0,
+      montant_ttc:   montantTTC,
+      montant_paye:  facture?.montant_paye ?? 0,
+      notes: JSON.stringify({
+        prestations: prestations.map(({ id: _id, ...p }) => p),
+        conditions, bankInfo, signature,
+      }),
+    }
+
+    return (
+      <div className="flex flex-col bg-slate-100 dark:bg-slate-900 overflow-hidden h-[100dvh] max-h-[100dvh]">
+
+        {/* Top bar */}
+        <div className="sticky top-0 z-30 flex items-center justify-between gap-2 px-3 md:px-5 py-2 md:py-3 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0">
+            <button onClick={() => setStep(1)}
+              className="flex items-center gap-1 md:gap-1.5 text-sm text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+              <span className="hidden sm:inline">Client</span>
+            </button>
+            <div className="hidden sm:block w-px h-5 bg-slate-200 dark:bg-slate-600" />
+            <span className="hidden sm:inline-block text-xs text-slate-400 font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded select-none truncate">
+              {previewFacture.numero}
             </span>
-          </label>
-          <Select value={form.statut}
-            onValueChange={v => setForm(p => ({ ...p, statut: v as FactureStatut }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(STATUT_CONFIG).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
-      {/* ── Optional stock product link — new factures only ── */}
-      {!facture && stockProducts.length > 0 && (
-        <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="form-label m-0">Produit du stock (optionnel)</label>
-            <span className="text-[11px] text-muted-foreground italic">
-              Auto-remplit le prix + décrémente le stock à la validation
-            </span>
+            {/* Mobile tab switcher */}
+            <div className="md:hidden flex items-center rounded-lg border border-slate-200 dark:border-slate-600 p-0.5 bg-slate-50 dark:bg-slate-700/50">
+              <button type="button" onClick={() => setMobileTab('edit')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  mobileTab === 'edit'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}>Édition</button>
+              <button type="button" onClick={() => setMobileTab('preview')}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  mobileTab === 'preview'
+                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}>Aperçu</button>
+            </div>
           </div>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <Select
-              value={stockLink.product_id || 'none'}
-              onValueChange={v => applyStockProduct(v === 'none' ? '' : v, stockLink.quantite)}
-            >
-              <SelectTrigger><SelectValue placeholder="— Aucun produit —" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— Aucun produit —</SelectItem>
-                {stockProducts.map(p => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nom} — {p.sku} (stock : {p.stock_actuel})
-                  </SelectItem>
+          <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+            <Button size="sm" variant="secondary" className="hidden md:inline-flex"
+              onClick={() => generateFacturePDF(previewFacture)}>
+              <Download className="w-3.5 h-3.5" /> PDF
+            </Button>
+            <Button size="sm" onClick={handleSubmit} disabled={busy}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-0 px-2.5 md:px-3 h-8">
+              {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span className="hidden sm:inline">{facture ? 'Mettre à jour' : 'Créer la facture'}</span>
+              <span className="sm:hidden">{facture ? 'Maj' : 'Créer'}</span>
+            </Button>
+            <button onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Two-panel body */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+          {/* LEFT — Edit panel */}
+          <div
+            style={{
+              ['--panel-w' as any]: `${panelWidth}px`,
+              minWidth: 0,
+              flexShrink: 0,
+            }}
+            className={`bg-white dark:bg-slate-800 overflow-y-auto h-full w-full md:w-[var(--panel-w)] md:min-w-[240px] md:max-w-[600px] ${
+              mobileTab === 'edit' ? 'block' : 'hidden md:block'
+            }`}
+          >
+            <div className="p-4 space-y-5">
+
+              {/* ── Prestations ── */}
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Prestations / Services</p>
+                <AnimatePresence>
+                  {prestations.map(p => (
+                    <PrestationRow key={p.id} p={p} onChange={updatePrestation} onDelete={deletePrestation} />
+                  ))}
+                </AnimatePresence>
+                <button
+                  onClick={addPrestation}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 text-xs text-slate-400 hover:border-blue-600/50 hover:text-blue-600 dark:text-blue-400 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Ajouter une prestation
+                </button>
+
+                {/* TVA */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/30">
+                  <div>
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-200">TVA</p>
+                    {tvaEnabled && <p className="text-[10px] text-slate-400">{tvaRate}% · +{formatCurrency(montantTVA)}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {tvaEnabled && (
+                      <Select value={String(tvaRate)} onValueChange={v => setTvaRate(+v)}>
+                        <SelectTrigger className="w-20 h-6 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {[0, 7, 10, 14, 20].map(r => (
+                            <SelectItem key={r} value={String(r)}>{r}%</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <button onClick={() => setTvaEnabled(v => !v)}>
+                      {tvaEnabled
+                        ? <ToggleRight className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+                        : <ToggleLeft  className="w-7 h-7 text-slate-400" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Totals mini summary */}
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-200 dark:border-slate-600 divide-y divide-slate-200 dark:divide-slate-600 text-xs">
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-slate-500">Sous-total HT</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(montantHT)}</span>
+                  </div>
+                  {tvaEnabled && (
+                    <div className="flex justify-between px-3 py-2">
+                      <span className="text-slate-500">TVA {tvaRate}%</span>
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCurrency(montantTVA)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between px-3 py-2 bg-slate-100 dark:bg-slate-700 rounded-b-xl">
+                    <span className="font-bold text-slate-700 dark:text-slate-100">TOTAL TTC</span>
+                    <span className="font-bold text-[#1e64c4]">{formatCurrency(montantTTC)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700" />
+
+              {/* Coordonnées bancaires */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Coordonnées bancaires</p>
+                {(['banque', 'iban', 'swift'] as const).map(field => (
+                  <div key={field}>
+                    <label className="form-label text-xs capitalize">{field === 'swift' ? 'SWIFT/BIC' : field.charAt(0).toUpperCase() + field.slice(1)}</label>
+                    <Input value={bankInfo[field]} onChange={e => setBankInfo(p => ({ ...p, [field]: e.target.value }))}
+                      className={`h-8 text-sm mt-0.5 ${field === 'iban' ? 'font-mono text-xs' : ''}`} />
+                  </div>
                 ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={stockLink.quantite}
-              onChange={e => applyStockProduct(stockLink.product_id, +e.target.value)}
-              className="w-24"
-              placeholder="Qté"
-              disabled={!stockLink.product_id}
-            />
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700" />
+
+              {/* Conditions de règlement */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Conditions de règlement</p>
+                <div className="space-y-1.5">
+                  {conditions.map((c, i) => (
+                    <div key={i} className="flex items-start gap-1.5 py-1 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 group">
+                      <span className="text-slate-400 text-xs mt-0.5">•</span>
+                      <span className="text-xs text-slate-700 dark:text-slate-200 flex-1 leading-relaxed">{c}</span>
+                      <button onClick={() => setConditions(p => p.filter((_, j) => j !== i))}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <X className="w-3 h-3 text-slate-400 hover:text-red-400" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-1.5">
+                  <Input value={newCondition} onChange={e => setNewCondition(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newCondition.trim()) { setConditions(p => [...p, newCondition.trim()]); setNewCondition('') }}}
+                    placeholder="Nouvelle condition..." className="h-7 text-xs" />
+                  <Button size="sm" className="h-7 px-2.5 flex-shrink-0"
+                    disabled={!newCondition.trim()}
+                    onClick={() => { if (newCondition.trim()) { setConditions(p => [...p, newCondition.trim()]); setNewCondition('') }}}>
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700" />
+
+              {/* Dates */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Dates</p>
+                <div>
+                  <label className="form-label text-xs">Date de la facture</label>
+                  <Input type="date" value={dateFacture} onChange={e => setDateFacture(e.target.value)} className="h-8 text-sm mt-0.5" />
+                </div>
+                <div>
+                  <label className="form-label text-xs">Date d'échéance</label>
+                  <Input type="date" value={dateEcheance} onChange={e => setDateEcheance(e.target.value)} className="h-8 text-sm mt-0.5" />
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-100 dark:bg-slate-700" />
+
+              {/* Signature */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Signature</p>
+                {signature ? (
+                  <div className="space-y-2">
+                    <div className="relative inline-block">
+                      <img src={signature} alt="Signature" className="h-20 rounded-lg border border-slate-200 bg-white object-contain" />
+                      <button type="button" onClick={() => setSignature(null)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <label className="cursor-pointer flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#1e64c4] transition-colors">
+                      <input type="file" accept="image/*" className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0]
+                          if (f) { const r = new FileReader(); r.onload = ev => setSignature(ev.target?.result as string); r.readAsDataURL(f) }
+                        }} />
+                      <PenLine className="w-3 h-3" /> Changer
+                    </label>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-xs text-slate-500 hover:border-[#1e64c4]/50 hover:text-[#1e64c4] hover:bg-[#1e64c4]/5 transition-colors w-full">
+                    <input type="file" accept="image/*" className="hidden"
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        if (f) { const r = new FileReader(); r.onload = ev => setSignature(ev.target?.result as string); r.readAsDataURL(f) }
+                      }} />
+                    <PenLine className="w-3.5 h-3.5" /> Ajouter une signature / tampon
+                  </label>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Resize handle */}
+          <div
+            onMouseDown={startResize}
+            className="hidden md:block w-1 flex-shrink-0 bg-slate-200 dark:bg-slate-700 hover:bg-[#1e64c4] active:bg-[#1e64c4] cursor-col-resize transition-colors relative group"
+            title="Glisser pour redimensionner"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+          </div>
+
+          {/* RIGHT — Scaled A4 preview */}
+          <div className={`flex-1 min-w-0 flex flex-col ${
+            mobileTab === 'preview' ? 'flex' : 'hidden md:flex'
+          }`}>
+            <A4Preview>
+              <FactureTemplate ref={previewRef} facture={previewFacture} client={client} />
+            </A4Preview>
           </div>
         </div>
-      )}
-
-      <div className="space-y-1.5">
-        <label className="form-label">Notes</label>
-        <textarea
-          value={form.notes}
-          onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-          rows={3}
-          placeholder="Notes internes, conditions de paiement…"
-          className="w-full rounded-lg border border-border bg-[var(--surface-input)] px-3 py-2 text-base sm:text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-blue-600 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.15)] transition-all"
-        />
       </div>
+    )
+  }
 
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Annuler</Button>
-        <Button type="submit" disabled={isPending}>
-          {isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-          {facture ? 'Mettre à jour' : 'Créer la facture'}
-        </Button>
-      </div>
-    </form>
+  /* ══════════════════════════════════════════════
+     STEP 1 — CLIENT PICKER
+  ══════════════════════════════════════════════ */
+  return (
+    <div className="space-y-0">
+      <p className="text-xs text-muted-foreground mb-1">
+        {facture ? 'Modifier la facture' : 'Nouvelle facture'} · Étape {step}/2
+      </p>
+      <StepBar step={step} labels={['Client', 'Facture']} />
+
+      <AnimatePresence mode="wait">
+        <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+
+          <div>
+            <label className="form-label">Sélectionner un client *</label>
+            <div className="flex gap-2 mt-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={clientSearch}
+                  onChange={e => setClientSearch(e.target.value)}
+                  placeholder="Rechercher par nom, téléphone, entreprise…"
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => setShowNewClient(s => !s)}>
+                <Plus className="w-3.5 h-3.5" /> Nouveau client
+              </Button>
+            </div>
+          </div>
+
+          {/* New client inline form */}
+          <AnimatePresence>
+            {showNewClient && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-xl border border-blue-600/30 bg-blue-600/5 p-4 space-y-3">
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Nouveau client</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input placeholder="Nom *" value={newClientForm.nom}
+                      onChange={e => setNewClientForm(p => ({ ...p, nom: e.target.value }))} className="text-sm" />
+                    <Input placeholder="Téléphone" value={newClientForm.telephone}
+                      onChange={e => setNewClientForm(p => ({ ...p, telephone: e.target.value }))} className="text-sm" />
+                    <Input placeholder="Email" value={newClientForm.email}
+                      onChange={e => setNewClientForm(p => ({ ...p, email: e.target.value }))} className="text-sm" />
+                    <Input placeholder="Entreprise" value={newClientForm.entreprise}
+                      onChange={e => setNewClientForm(p => ({ ...p, entreprise: e.target.value }))} className="text-sm" />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setShowNewClient(false)}>Annuler</Button>
+                    <Button size="sm" onClick={saveNewClient} disabled={!newClientForm.nom.trim() || busy}>
+                      {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                      Créer & sélectionner
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Client list */}
+          <div className="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-border">
+            {filteredClients.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
+                  selectedId === c.id
+                    ? 'bg-blue-600/10 text-foreground'
+                    : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                  selectedId === c.id ? 'bg-blue-600 text-white' : 'bg-muted'
+                }`}>
+                  {getInitials(c.nom)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium leading-tight ${selectedId === c.id ? 'text-foreground' : ''}`}>
+                    {c.telephone && <span className="mr-1">{c.telephone}</span>}
+                    {c.entreprise && <span className="text-muted-foreground">{c.entreprise}</span>}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{c.nom}</p>
+                </div>
+                {selectedId === c.id && <Check className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+              </button>
+            ))}
+            {filteredClients.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Aucun client trouvé</p>
+            )}
+          </div>
+
+          {/* Selected client info card */}
+          {client && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl border border-blue-600/30 bg-blue-600/5 p-4"
+            >
+              <div className="mb-3">
+                <p className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Informations du client</p>
+              </div>
+              <p className="text-sm font-semibold text-foreground">{client.entreprise ?? client.nom}</p>
+              {client.telephone && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                  <Phone className="w-3 h-3" />{client.telephone}
+                </p>
+              )}
+              {client.email && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <Mail className="w-3 h-3" />{client.email}
+                </p>
+              )}
+              {client.adresse && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <MapPin className="w-3 h-3" />{[client.adresse, client.ville].filter(Boolean).join(', ')}
+                </p>
+              )}
+            </motion.div>
+          )}
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Date de la facture</label>
+              <Input type="date" value={dateFacture} onChange={e => setDateFacture(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <label className="form-label">Date d'échéance</label>
+              <Input type="date" value={dateEcheance} onChange={e => setDateEcheance(e.target.value)} className="mt-1" />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-between pt-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>Annuler</Button>
+            <Button size="sm" onClick={() => { if (!selectedId) { toast.error('Sélectionnez un client'); return }; setStep(2) }}
+              disabled={!selectedId}>
+              Suivant <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
   )
 }
 
@@ -627,10 +991,13 @@ export default function Factures() {
 
   // Modal states
   const [showForm,     setShowForm]    = useState(false)
+  const [wizardStep,   setWizardStep]  = useState(1)
   const [editing,      setEditing]     = useState<Facture | undefined>()
   const [viewTarget,   setViewTarget]  = useState<Facture | null>(null)
   const [deleteTarget, setDeleteTarget]= useState<Facture | null>(null)
   const [emailTarget,  setEmailTarget] = useState<Facture | null>(null)
+
+  const closeWizard = () => { setShowForm(false); setEditing(undefined); setWizardStep(1) }
 
   /* ── Filtered list ─────────────────────────────────────────────── */
   const dateMatch = useMemo(() => makeDatePredicate(dateRange), [dateRange])
@@ -1003,18 +1370,36 @@ export default function Factures() {
 
       {/* ── Modals ──────────────────────────────────────────────── */}
 
-      {/* Create / Edit form */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              {editing ? 'Modifier la facture' : 'Nouvelle facture'}
-            </DialogTitle>
-          </DialogHeader>
-          <FactureForm
+      {/* Create / Edit wizard — Dialog grows full-screen on Step 2 */}
+      <Dialog
+        open={showForm}
+        onOpenChange={v => {
+          if (!v) {
+            if (wizardStep === 1) { closeWizard(); return }
+            if (window.confirm('Quitter sans sauvegarder ? Les modifications seront perdues.')) {
+              closeWizard()
+            }
+          }
+        }}
+      >
+        <DialogContent
+          className={wizardStep === 2
+            ? '!left-0 !top-0 !translate-x-0 !translate-y-0 !max-w-none !w-screen !h-[100dvh] !max-h-[100dvh] !p-0 !gap-0 !rounded-none !overflow-hidden [&>button:last-child]:hidden'
+            : 'max-w-2xl max-h-[90dvh] overflow-y-auto'
+          }
+        >
+          {wizardStep === 1 && (
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                {editing ? `Modifier ${editing.numero}` : 'Nouvelle facture'}
+              </DialogTitle>
+            </DialogHeader>
+          )}
+          <FactureWizard
             facture={editing}
-            onClose={() => { setShowForm(false); setEditing(undefined) }}
+            onClose={closeWizard}
+            onStepChange={setWizardStep}
           />
         </DialogContent>
       </Dialog>

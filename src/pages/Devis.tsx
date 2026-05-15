@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useDevis, useCreateDevis, useUpdateDevis, useDeleteDevis, type Devis } from '@/hooks/useDevis'
 import { useClients, useCreateClient, type Client } from '@/hooks/useClients'
-import { useCreateFacture } from '@/hooks/useFactures'
+import { useCreateFacture, useFactures } from '@/hooks/useFactures'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Badge }   from '@/components/ui/badge'
@@ -38,7 +38,7 @@ export interface DescriptionBlock {
   content: string   // for list: \n-separated items
 }
 
-interface Prestation {
+export interface Prestation {
   id:              string
   titre:           string
   description:     DescriptionBlock[]
@@ -48,19 +48,19 @@ interface Prestation {
   showPrixUnit?:   boolean
 }
 
-interface BankInfo { banque: string; iban: string; swift: string }
+export interface BankInfo { banque: string; iban: string; swift: string }
 
 /* ─── Notes JSON structure ─────────────────────────────────────────── */
-interface DevisNotesData {
+export interface DevisNotesData {
   prestations: Omit<Prestation, 'id'>[]
   conditions:  string[]
   bankInfo:    BankInfo
   signature?:  string | null
 }
 
-const DEFAULT_BANK: BankInfo = { banque: 'CIH', iban: '230 570 6435881221008400 29', swift: 'CIHMMAMC' }
+export const DEFAULT_BANK: BankInfo = { banque: 'CIH', iban: '230 570 6435881221008400 29', swift: 'CIHMMAMC' }
 
-function parseDevisNotes(notes: string | null): DevisNotesData {
+export function parseDevisNotes(notes: string | null): DevisNotesData {
   if (!notes) return { prestations: [], conditions: [], bankInfo: DEFAULT_BANK }
   try {
     const d = JSON.parse(notes) as DevisNotesData
@@ -94,8 +94,8 @@ const STATUT_CONFIG = {
 }
 
 /* ─── Step indicator ──────────────────────────────────────────────── */
-function StepBar({ step }: { step: number }) {
-  const steps = ['Client', 'Devis']
+export function StepBar({ step, labels = ['Client', 'Devis'] }: { step: number; labels?: [string, string] }) {
+  const steps = labels
   return (
     <div className="flex items-center gap-0 mb-6">
       {steps.map((label, i) => {
@@ -189,7 +189,7 @@ function htmlToBlocks(html: string): DescriptionBlock[] {
 }
 
 /* ─── Description editor with toolbar ────────────────────────────── */
-function DescriptionEditor({
+export function DescriptionEditor({
   value, onChange,
 }: {
   value:    DescriptionBlock[]
@@ -319,7 +319,7 @@ function DescriptionEditor({
 }
 
 /* ─── Prestation row ──────────────────────────────────────────────── */
-function PrestationRow({
+export function PrestationRow({
   p, onChange, onDelete,
 }: {
   p: Prestation
@@ -429,7 +429,7 @@ function PrestationRow({
 const A4_W_PX = 794   // 210mm @ 96 dpi
 const A4_H_PX = 1123  // 297mm @ 96 dpi
 
-function A4Preview({ children }: { children: React.ReactNode }) {
+export function A4Preview({ children }: { children: React.ReactNode }) {
   const containerRef  = useRef<HTMLDivElement>(null)
   const contentRef    = useRef<HTMLDivElement>(null)
   const [scale, setScale]   = useState(1)
@@ -1439,12 +1439,26 @@ export default function DevisPage() {
   const deleteDevis    = useDeleteDevis()
   const updateDevis    = useUpdateDevis()
   const createFacture  = useCreateFacture()
+  const { data: allFactures = [] } = useFactures()
 
   const convertToFacture = async (d: Devis) => {
     try {
-      const today   = new Date().toISOString().slice(0, 10)
+      const today    = new Date().toISOString().slice(0, 10)
       const echeance = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)
-      const nextNum  = `FAC-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+
+      /* Sequential FAC-YYYY-NNN — no collision with existing factures */
+      const year   = new Date().getFullYear()
+      const maxSeq = allFactures
+        .filter(x => x.numero.startsWith(`FAC-${year}-`))
+        .reduce((max, x) => {
+          const m = x.numero.match(/FAC-\d{4}-(\d+)/)
+          return m ? Math.max(max, parseInt(m[1], 10)) : max
+        }, 0)
+      const nextNum = `FAC-${year}-${String(maxSeq + 1).padStart(3, '0')}`
+
+      /* Copy the full JSON notes payload — preserves prestations,
+         conditions, bankInfo and signature so the new facture opens
+         pre-filled in the wizard. */
       await createFacture.mutateAsync({
         numero:        nextNum,
         client_id:     d.client_id,
@@ -1455,9 +1469,9 @@ export default function DevisPage() {
         tva:           d.tva,
         montant_ttc:   d.montant_ttc,
         montant_paye:  0,
-        notes:         `Généré depuis le devis ${d.numero}`,
+        notes:         d.notes,
       } as any)
-      toast.success(`Facture créée depuis ${d.numero}`)
+      toast.success(`Facture ${nextNum} créée depuis ${d.numero}`)
       navigate(`/${tenantSlug}/factures`)
     } catch {
       toast.error('Erreur lors de la conversion')
@@ -1613,18 +1627,23 @@ export default function DevisPage() {
                           Modifier
                         </button>
 
-                        {/* Hidden-until-hover: convert, PDF, delete */}
+                        {/* Always-visible for accepted devis — primary follow-up action */}
+                        {d.statut === 'accepte' && (
+                          <button
+                            onClick={() => convertToFacture(d)}
+                            disabled={createFacture.isPending}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-white hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                            title="Créer une facture à partir de ce devis (copie prestations, conditions, banque, signature)"
+                          >
+                            {createFacture.isPending
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Receipt className="w-3.5 h-3.5" />}
+                            Facturer
+                          </button>
+                        )}
+
+                        {/* Hidden-until-hover: PDF, delete */}
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {d.statut === 'accepte' && (
-                            <Button
-                              variant="ghost" size="icon" className="w-7 h-7 text-emerald-500 hover:text-emerald-600"
-                              onClick={() => convertToFacture(d)}
-                              title="Convertir en Facture"
-                              disabled={createFacture.isPending}
-                            >
-                              <Receipt className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
                           <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => generateDevisPDFWithRetry(d, clients.find(c => c.id === d.client_id)).catch(console.error)} title="Télécharger PDF">
                             <Download className="w-3.5 h-3.5" />
                           </Button>
