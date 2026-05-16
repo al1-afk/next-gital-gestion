@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Plus, Trash2, GripVertical, Save, FileText,
@@ -185,21 +186,26 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
 
   if (!open) return null
 
-  return (
+  /* Rendu via Portal pour éviter les parents avec transform/filter qui
+     créeraient un containing block et casseraient `position: fixed`. */
+  return createPortal(
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6"
+        transition={{ duration: 0.2 }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
+        className="bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-0 md:p-6"
         onClick={onClose}
       >
         <motion.div
-          initial={{ opacity: 0, y: 40, scale: 0.96 }}
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 40, scale: 0.96 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative bg-background border border-border rounded-t-3xl md:rounded-2xl shadow-2xl ring-1 ring-white/10 w-full md:max-w-3xl max-h-[95vh] md:max-h-[92vh] flex flex-col overflow-hidden"
+          exit={{ opacity: 0, y: 20, scale: 0.97 }}
+          transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+          className="relative bg-background border border-border rounded-2xl shadow-2xl ring-1 ring-white/10 w-full md:max-w-3xl flex flex-col overflow-hidden"
+          style={{ maxHeight: 'min(92vh, 900px)' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header avec accent gradient en haut */}
@@ -384,7 +390,8 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
           </div>
         </motion.div>
       </motion.div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
 
