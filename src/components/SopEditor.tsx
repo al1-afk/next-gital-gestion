@@ -170,6 +170,19 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
     onClose()
   }
 
+  /* Bloquer le scroll de la page + touche Escape pour fermer */
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
   if (!open) return null
 
   return (
@@ -178,7 +191,7 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-2 md:p-6"
+        className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-6"
         onClick={onClose}
       >
         <motion.div
@@ -186,31 +199,44 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 40, scale: 0.96 }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden"
+          className="relative bg-background border border-border rounded-t-3xl md:rounded-2xl shadow-2xl ring-1 ring-white/10 w-full md:max-w-3xl max-h-[95vh] md:max-h-[92vh] flex flex-col overflow-hidden"
           onClick={e => e.stopPropagation()}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
-            <div>
-              <h2 className="text-lg font-bold text-foreground">
-                {existing ? 'Modifier le SOP' : 'Nouveau SOP'}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                {existing ? 'Édition d\'une procédure existante' : 'Créer une nouvelle procédure ou un template'}
-              </p>
+          {/* Header avec accent gradient en haut */}
+          <div className="relative flex-shrink-0">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500" />
+            <div className="flex items-center justify-between px-5 md:px-6 py-4 border-b border-border bg-gradient-to-br from-blue-50/50 to-violet-50/30 dark:from-blue-950/20 dark:to-violet-950/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-extrabold tracking-tight text-foreground">
+                    {existing ? 'Modifier le SOP' : 'Nouveau SOP'}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {existing ? 'Édition d\'une procédure existante' : 'Créer une nouvelle procédure ou un template'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-white/80 dark:hover:bg-slate-800 transition-colors"
+                title="Fermer (Echap)"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
-            >
-              <X className="w-5 h-5 text-muted-foreground" />
-            </button>
           </div>
 
           {/* Body — scrollable */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {/* Métadonnées */}
-            <div className="space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 md:px-6 py-5 space-y-6">
+            {/* Section : Métadonnées */}
+            <section className="space-y-3">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block w-1 h-4 rounded-full bg-blue-500" />
+                Informations
+              </h3>
               <Field label="Titre" required>
                 <Input
                   value={title}
@@ -279,13 +305,16 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
                   </div>
                 )}
               </Field>
-            </div>
+            </section>
 
-            {/* Blocks */}
-            <div className="border-t border-border pt-5">
+            {/* Section : Contenu / Blocs */}
+            <section>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-foreground">Contenu</h3>
-                <span className="text-[11px] text-muted-foreground">{blocks.length} bloc{blocks.length > 1 ? 's' : ''}</span>
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground flex items-center gap-1.5">
+                  <span className="inline-block w-1 h-4 rounded-full bg-violet-500" />
+                  Contenu
+                </h3>
+                <span className="text-[11px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-md">{blocks.length} bloc{blocks.length > 1 ? 's' : ''}</span>
               </div>
 
               <div className="space-y-3">
@@ -307,8 +336,11 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
               </div>
 
               {/* Ajouter bloc */}
-              <div className="mt-4 p-3 rounded-xl border border-dashed border-border bg-muted/20">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Ajouter un bloc</p>
+              <div className="mt-4 p-4 rounded-xl border border-dashed border-blue-300 dark:border-blue-700/50 bg-blue-50/30 dark:bg-blue-950/10">
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5" />
+                  Ajouter un bloc
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {BLOCK_TYPES.map(bt => {
                     const Icon = bt.icon
@@ -316,7 +348,7 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
                       <button
                         key={bt.type}
                         onClick={() => addBlock(bt.type)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border bg-background hover:bg-muted hover:border-blue-400 hover:text-blue-600 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-background hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300 transition-all"
                       >
                         <Icon className="w-3.5 h-3.5" />
                         {bt.label}
@@ -325,17 +357,17 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
                   })}
                 </div>
               </div>
-            </div>
+            </section>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border flex-shrink-0 bg-muted/20">
-            <div className="text-[11px] text-muted-foreground">
+          {/* Footer collant */}
+          <div className="flex items-center justify-between gap-3 px-5 md:px-6 py-3.5 border-t border-border flex-shrink-0 bg-card/95 backdrop-blur-sm">
+            <div className="text-[11px] text-muted-foreground hidden sm:block">
               {existing
-                ? `Modifié le ${new Date(existing.updated_at).toLocaleDateString('fr-FR')}`
-                : 'Le SOP sera sauvegardé dans votre workspace'}
+                ? `Modifié le ${new Date(existing.updated_at).toLocaleDateString('fr-FR')} • ${blocks.length} bloc${blocks.length > 1 ? 's' : ''}`
+                : `${blocks.length} bloc${blocks.length > 1 ? 's' : ''} • Échap pour annuler`}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 ml-auto">
               <Button variant="secondary" size="sm" onClick={onClose}>
                 Annuler
               </Button>
@@ -343,9 +375,10 @@ export default function SopEditor({ open, existing, initialCategory, onClose }: 
                 size="sm"
                 onClick={save}
                 disabled={!title.trim() || create.isPending || update.isPending}
+                className="min-w-[120px]"
               >
                 <Save className="w-3.5 h-3.5" />
-                {(create.isPending || update.isPending) ? 'Sauvegarde…' : existing ? 'Mettre à jour' : 'Créer'}
+                {(create.isPending || update.isPending) ? 'Sauvegarde…' : existing ? 'Mettre à jour' : 'Créer le SOP'}
               </Button>
             </div>
           </div>
