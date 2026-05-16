@@ -21,6 +21,8 @@ const ALLOWED_TABLES = new Set([
   'guide_steps', 'guide_templates', 'guide_checklists',
   'guide_checklist_state', 'guide_template_renders',
   'guide_discovery_questions', 'tenant_vision',
+  /* SOPs personnalisés (Procédures internes) */
+  'sops',
 ])
 
 const isProd = process.env.NODE_ENV === 'production'

@@ -12,6 +12,10 @@ import { Input }  from '@/components/ui/input'
 import { Badge }  from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { Trash2 } from 'lucide-react'
+import SopEditor from '@/components/SopEditor'
+import { useSops, useDeleteSop, type Sop as DbSop } from '@/hooks/useSops'
+import { useAuth } from '@/hooks/useAuth'
 
 /* ═══════════════════════════════════════════════════════════════════
    TYPES
@@ -420,6 +424,26 @@ function saveFavs(ids: string[]) {
 /* ═══════════════════════════════════════════════════════════════════
    PAGE
    ═══════════════════════════════════════════════════════════════════ */
+/* Convertit un SOP de la DB (snake_case) vers la forme du composant (camelCase + isUserCreated) */
+function dbSopToView(s: DbSop): SOP & { isUserCreated: true; dbId: string } {
+  return {
+    id:          s.id,
+    dbId:        s.id,
+    title:       s.title,
+    description: s.description ?? '',
+    category:    (s.category as CategoryKey) ?? 'whatsapp',
+    tags:        Array.isArray(s.tags) ? s.tags : [],
+    author:      s.author ?? 'Vous',
+    authorBg:    s.author_bg ?? 'bg-blue-500',
+    updatedAt:   (s.updated_at ?? '').slice(0, 10),
+    readMin:     s.read_min ?? 2,
+    views:       s.views ?? 0,
+    popular:     s.popular,
+    blocks:      Array.isArray(s.blocks) ? (s.blocks as SOPBlock[]) : [],
+    isUserCreated: true,
+  }
+}
+
 export default function SOPPage() {
   const [activeCat,  setActiveCat]  = useState<CategoryKey>('home')
   const [query,      setQuery]      = useState('')
@@ -427,6 +451,21 @@ export default function SOPPage() {
   const [favs,       setFavs]       = useState<string[]>(loadFavs)
   const [activeTag,  setActiveTag]  = useState<string | null>(null)
   const [onlyFavs,   setOnlyFavs]   = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingSop, setEditingSop] = useState<DbSop | null>(null)
+
+  const { role } = useAuth()
+  const canEdit  = role === 'admin' || role === 'manager'
+  const canDelete = role === 'admin'
+
+  const { data: dbSops = [] } = useSops()
+  const deleteSop = useDeleteSop()
+
+  /* SOPs combinés : ceux créés par l'utilisateur (DB) en premier, puis les exemples statiques */
+  const ALL_SOPS = useMemo<(SOP & { isUserCreated?: boolean; dbId?: string })[]>(
+    () => [...dbSops.map(dbSopToView), ...SOPS],
+    [dbSops]
+  )
 
   const toggleFav = (id: string) => {
     setFavs(prev => {
@@ -438,7 +477,7 @@ export default function SOPPage() {
 
   /* ── Filtres ── */
   const filtered = useMemo(() => {
-    let list = SOPS
+    let list = ALL_SOPS
     if (activeCat !== 'home') list = list.filter(s => s.category === activeCat)
     if (onlyFavs) list = list.filter(s => favs.includes(s.id))
     if (activeTag) list = list.filter(s => s.tags.includes(activeTag))
@@ -451,15 +490,29 @@ export default function SOPPage() {
       )
     }
     return list
-  }, [activeCat, query, favs, onlyFavs, activeTag])
+  }, [ALL_SOPS, activeCat, query, favs, onlyFavs, activeTag])
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
-    SOPS.forEach(s => s.tags.forEach(t => set.add(t)))
+    ALL_SOPS.forEach(s => s.tags.forEach(t => set.add(t)))
     return Array.from(set)
-  }, [])
+  }, [ALL_SOPS])
 
-  const openedSOP = openId ? SOPS.find(s => s.id === openId) : null
+  const openedSOP = openId ? ALL_SOPS.find(s => s.id === openId) : null
+
+  const handleEdit = (sopView: SOP & { dbId?: string }) => {
+    if (!sopView.dbId) return
+    const dbSop = dbSops.find(s => s.id === sopView.dbId)
+    if (!dbSop) return
+    setEditingSop(dbSop)
+    setEditorOpen(true)
+  }
+  const handleDelete = (sopView: SOP & { dbId?: string }) => {
+    if (!sopView.dbId) return
+    if (!confirm(`Supprimer définitivement « ${sopView.title} » ?`)) return
+    deleteSop.mutate(sopView.dbId)
+    if (openId === sopView.id) setOpenId(null)
+  }
 
   /* ═══ Page header ═══ */
   return (
@@ -478,9 +531,11 @@ export default function SOPPage() {
           <Button variant="secondary" size="sm">
             <Download className="w-3.5 h-3.5" /> Exporter
           </Button>
-          <Button size="sm" onClick={() => toast.success('Bientôt : création de SOP')}>
-            <Plus className="w-3.5 h-3.5" /> Nouveau SOP
-          </Button>
+          {canEdit && (
+            <Button size="sm" onClick={() => { setEditingSop(null); setEditorOpen(true) }}>
+              <Plus className="w-3.5 h-3.5" /> Nouveau SOP
+            </Button>
+          )}
         </div>
       </div>
 
@@ -507,9 +562,9 @@ export default function SOPPage() {
 
           {/* Mini-stats sous la search */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-            <MiniStat icon={FileText}   label="SOP totaux"   value={SOPS.length} className="kpi-blue text-[var(--pastel-blue-txt)]" />
+            <MiniStat icon={FileText}   label="SOP totaux"   value={ALL_SOPS.length} className="kpi-blue text-[var(--pastel-blue-txt)]" />
             <MiniStat icon={Star}       label="Favoris"      value={favs.length} className="kpi-orange text-[var(--pastel-orange-txt)]" />
-            <MiniStat icon={TrendingUp} label="Populaires"   value={SOPS.filter(s => s.popular).length} className="kpi-green text-[var(--pastel-green-txt)]" />
+            <MiniStat icon={TrendingUp} label="Populaires"   value={ALL_SOPS.filter(s => s.popular).length} className="kpi-green text-[var(--pastel-green-txt)]" />
             <MiniStat icon={Users}      label="Catégories"   value={CATEGORIES.length - 1} className="kpi-purple text-[var(--pastel-purple-txt)]" />
           </div>
         </div>
@@ -524,13 +579,13 @@ export default function SOPPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
               Catégories
             </p>
-            <span className="text-[10px] text-muted-foreground">{SOPS.length}</span>
+            <span className="text-[10px] text-muted-foreground">{ALL_SOPS.length}</span>
           </div>
           <nav className="space-y-0.5">
             {CATEGORIES.map(cat => {
               const count = cat.key === 'home'
-                ? SOPS.length
-                : SOPS.filter(s => s.category === cat.key).length
+                ? ALL_SOPS.length
+                : ALL_SOPS.filter(s => s.category === cat.key).length
               const active = activeCat === cat.key
               return (
                 <button
@@ -639,7 +694,7 @@ export default function SOPPage() {
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                       {CATEGORIES.filter(c => c.key !== 'home').map((cat, i) => {
-                        const count = SOPS.filter(s => s.category === cat.key).length
+                        const count = ALL_SOPS.filter(s => s.category === cat.key).length
                         return (
                           <motion.button
                             key={cat.key}
@@ -668,6 +723,20 @@ export default function SOPPage() {
                 )}
 
                 {/* Populaires (home only) */}
+                {activeCat === 'home' && !query && !onlyFavs && !activeTag && dbSops.length === 0 && canEdit && (
+                  <div className="rounded-2xl border border-dashed border-blue-300 dark:border-blue-700/50 bg-blue-50/50 dark:bg-blue-950/20 p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+                      <Plus className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground">Créez votre premier SOP personnalisé</p>
+                      <p className="text-xs text-muted-foreground">Les exemples ci-dessous sont en lecture seule. Cliquez sur « Nouveau SOP » pour bâtir votre propre bibliothèque.</p>
+                    </div>
+                    <Button size="sm" onClick={() => { setEditingSop(null); setEditorOpen(true) }}>
+                      <Plus className="w-3.5 h-3.5" /> Commencer
+                    </Button>
+                  </div>
+                )}
                 {activeCat === 'home' && !query && !onlyFavs && !activeTag && (
                   <section>
                     <div className="flex items-center justify-between mb-3">
@@ -677,7 +746,7 @@ export default function SOPPage() {
                       </h2>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                      {SOPS.filter(s => s.popular).slice(0, 6).map((sop, i) => (
+                      {ALL_SOPS.filter(s => s.popular).slice(0, 6).map((sop, i) => (
                         <SOPCard
                           key={sop.id}
                           sop={sop}
@@ -685,6 +754,10 @@ export default function SOPPage() {
                           onOpen={() => setOpenId(sop.id)}
                           onToggleFav={() => toggleFav(sop.id)}
                           delay={i * 0.04}
+                          canEdit={canEdit}
+                          canDelete={canDelete}
+                          onEdit={() => handleEdit(sop)}
+                          onDelete={() => handleDelete(sop)}
                         />
                       ))}
                     </div>
@@ -701,7 +774,7 @@ export default function SOPPage() {
                       </h2>
                     </div>
                     <div className="card-premium divide-y divide-border/50">
-                      {[...SOPS].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(sop => {
+                      {[...ALL_SOPS].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5).map(sop => {
                         const cat = CATEGORIES.find(c => c.key === sop.category)!
                         return (
                           <button
@@ -773,6 +846,10 @@ export default function SOPPage() {
                             onOpen={() => setOpenId(sop.id)}
                             onToggleFav={() => toggleFav(sop.id)}
                             delay={i * 0.04}
+                            canEdit={canEdit}
+                            canDelete={canDelete}
+                            onEdit={() => handleEdit(sop)}
+                            onDelete={() => handleDelete(sop)}
                           />
                         ))}
                       </div>
@@ -784,6 +861,13 @@ export default function SOPPage() {
           </AnimatePresence>
         </main>
       </div>
+
+      <SopEditor
+        open={editorOpen}
+        existing={editingSop}
+        initialCategory={activeCat}
+        onClose={() => { setEditorOpen(false); setEditingSop(null) }}
+      />
     </div>
   )
 }
@@ -810,8 +894,16 @@ function MiniStat({ icon: Icon, label, value, className }: {
 /* ═══════════════════════════════════════════════════════════════════
    SOP CARD
    ═══════════════════════════════════════════════════════════════════ */
-function SOPCard({ sop, isFav, onOpen, onToggleFav, delay = 0 }: {
-  sop: SOP; isFav: boolean; onOpen: () => void; onToggleFav: () => void; delay?: number
+function SOPCard({ sop, isFav, onOpen, onToggleFav, delay = 0, onEdit, onDelete, canEdit, canDelete }: {
+  sop: SOP & { isUserCreated?: boolean }
+  isFav: boolean
+  onOpen: () => void
+  onToggleFav: () => void
+  delay?: number
+  onEdit?: () => void
+  onDelete?: () => void
+  canEdit?: boolean
+  canDelete?: boolean
 }) {
   const cat = CATEGORIES.find(c => c.key === sop.category)!
   return (
@@ -831,6 +923,29 @@ function SOPCard({ sop, isFav, onOpen, onToggleFav, delay = 0 }: {
             <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">
               POPULAIRE
             </span>
+          )}
+          {!sop.isUserCreated && (
+            <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              EXEMPLE
+            </span>
+          )}
+          {sop.isUserCreated && canEdit && onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit() }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Modifier"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {sop.isUserCreated && canDelete && onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete() }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
+              title="Supprimer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFav() }}

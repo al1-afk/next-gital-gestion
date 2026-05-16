@@ -201,3 +201,6 @@ export const guideChecklistStateApi     = tableApi('guide_checklist_state')
 export const guideTemplateRendersApi    = tableApi('guide_template_renders')
 export const guideDiscoveryQuestionsApi = tableApi('guide_discovery_questions')
 export const tenantVisionApi            = tableApi('tenant_vision')
+
+/* ── SOPs personnalisés ─────────────────────────────────────── */
+export const sopsApi                    = tableApi('sops')
