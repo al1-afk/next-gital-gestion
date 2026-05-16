@@ -47,6 +47,9 @@ const Rapports            = lazy(() => import('@/pages/Rapports'))
 const SOP                 = lazy(() => import('@/pages/SOP'))
 const Landing             = lazy(() => import('@/pages/Landing'))
 const ComingSoon          = lazy(() => import('@/pages/ComingSoon'))
+const Guides              = lazy(() => import('@/pages/Guides'))
+const GuideStep           = lazy(() => import('@/pages/GuideStep'))
+const Vision              = lazy(() => import('@/pages/Vision'))
 
 import { queryClient } from '@/lib/queryClient'
 
@@ -116,6 +119,9 @@ export default function App() {
               <Route path="automatisations"            element={<Automatisations />} />
               <Route path="rapports"                   element={<Rapports />} />
               <Route path="sop"                        element={<SOP />} />
+              <Route path="guides"                     element={<Guides />} />
+              <Route path="guides/:stepKey"            element={<GuideStep />} />
+              <Route path="vision"                     element={<Vision />} />
               <Route path="bientot"                    element={<ComingSoon />} />
               <Route path="*"                          element={<Navigate to="" replace />} />
             </Route>

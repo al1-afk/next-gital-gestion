@@ -71,6 +71,18 @@ const TABLE_ACL: Record<string, Record<Action, Role[]>> = {
   salaires_paiements:   matrix(['admin','comptable'],           ['admin','comptable'],                        ['admin','comptable'],            ['admin']),
   tache_actions:        rw(ALL),
   personal_tasks:       rw(ALL),
+  /* Module Guides — playbook lecture pour tous, écriture admin/manager.
+     guide_checklist_state et guide_template_renders : chaque user gère
+     son propre état → CRUD pour tous (RLS + tenant_id assurent l'isolation). */
+  guide_steps:               matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  guide_templates:           matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  guide_checklists:          matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  guide_checklist_state:     rw(ALL),
+  guide_template_renders:    rw(ALL),
+  guide_discovery_questions: matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  /* Vision (Primary Aim) — lecture pour tous (widgets Dashboard),
+     écriture admin seulement (page /vision protège déjà l'UI) */
+  tenant_vision:             matrix(ALL,                  ['admin'],           ['admin'],           ['admin']),
 }
 
 export function canTableAction(role: Role, table: string, action: Action): boolean {

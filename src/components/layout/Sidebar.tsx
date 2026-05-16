@@ -7,7 +7,7 @@ import {
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
   Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target, Sparkles,
-  BookOpen,
+  BookOpen, Crown, MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
@@ -21,6 +21,8 @@ interface NavItem {
   badge?: string
   /** Module key — used by per-user access overrides. Same as href without leading slash; '' for dashboard */
   module?: string
+  /** Si true → caché pour tous sauf admin (filtre AVANT filterItem) */
+  adminOnly?: boolean
 }
 
 /** All module keys known to the sidebar — used by the access-management UI */
@@ -55,6 +57,8 @@ export const ALL_MODULES: { key: string; label: string }[] = [
   { key: 'integrations',      label: 'Intégrations' },
   { key: 'rapports',          label: 'Rapports & Export' },
   { key: 'sop',               label: 'SOP & Procédures' },
+  { key: 'guides',            label: 'Guides onboarding' },
+  { key: 'vision',            label: 'Ma Vision (admin)' },
   { key: 'bientot',           label: 'Bientôt' },
 ]
 
@@ -63,6 +67,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'Principal',
     items: [
       { label: 'Tableau de bord', href: '/',          icon: LayoutDashboard, module: 'dashboard' },
+      { label: 'Ma Vision',       href: '/vision',    icon: Crown, module: 'vision', adminOnly: true },
       { label: 'CRM / Prospects', href: '/prospects', icon: UserCheck, badge: 'IA', module: 'prospects' },
       { label: 'Clients',         href: '/clients',   icon: Users, module: 'clients' },
       { label: 'Tâches',          href: '/taches',    icon: CheckSquare, module: 'taches' },
@@ -112,6 +117,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Intégrations',       href: '/integrations',     icon: PlugZap, module: 'integrations' },
       { label: 'Rapports & Export',  href: '/rapports',         icon: FileDown, module: 'rapports' },
       { label: 'SOP & Procédures',   href: '/sop',              icon: BookOpen, badge: 'New', module: 'sop' },
+      { label: 'Guides onboarding',  href: '/guides',           icon: MapPin,   badge: 'New', module: 'guides' },
       { label: 'Bientôt',            href: '/bientot',          icon: Rocket,  badge: 'Soon', module: 'bientot' },
     ],
   },
@@ -144,6 +150,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
      allowed_modules list when set, role default otherwise */
   const { role: userRole, allowedModules } = useAuth()
   const filterItem = (item: NavItem): boolean => {
+    /* Items marqués adminOnly cachés à tous sauf admin */
+    if (item.adminOnly && userRole !== 'admin') return false
     if (userRole === 'admin') return true
     /* No module key on item → show by default (Settings link, etc.) */
     if (!item.module) return true

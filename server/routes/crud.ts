@@ -17,6 +17,10 @@ const ALLOWED_TABLES = new Set([
   'calendrier_events', 'bank_accounts', 'credits_dettes',
   'bons_commande', 'conges', 'salaires_paiements', 'tache_actions',
   'personal_tasks',
+  /* Module Guides (playbook onboarding client) */
+  'guide_steps', 'guide_templates', 'guide_checklists',
+  'guide_checklist_state', 'guide_template_renders',
+  'guide_discovery_questions', 'tenant_vision',
 ])
 
 const isProd = process.env.NODE_ENV === 'production'

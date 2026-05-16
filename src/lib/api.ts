@@ -192,3 +192,12 @@ export const bonsCommandeApi     = tableApi('bons_commande')
 export const congesApi           = tableApi('conges')
 export const salairesPaiementsApi = tableApi('salaires_paiements')
 export const tacheActionsApi     = tableApi('tache_actions')
+
+/* ── Module Guides (playbook onboarding client) ──────────────── */
+export const guideStepsApi              = tableApi('guide_steps')
+export const guideTemplatesApi          = tableApi('guide_templates')
+export const guideChecklistsApi         = tableApi('guide_checklists')
+export const guideChecklistStateApi     = tableApi('guide_checklist_state')
+export const guideTemplateRendersApi    = tableApi('guide_template_renders')
+export const guideDiscoveryQuestionsApi = tableApi('guide_discovery_questions')
+export const tenantVisionApi            = tableApi('tenant_vision')

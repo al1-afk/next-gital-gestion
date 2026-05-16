@@ -23,6 +23,7 @@ import { computeCashFlowProjection, detectAnomalies } from '@/lib/intelligence'
 import { formatCurrency, formatCurrencyCompact, formatDate, useIsMobileViewport } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import VisionWidgets from '@/components/VisionWidgets'
 
 /* ─── Helpers ─────────────────────────────────────────────────────── */
 function relativeTime(iso: string): string {
@@ -331,6 +332,9 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Vision : Cap mensuel + Objectif du mois ── */}
+      <VisionWidgets />
 
       {/* ── Alert banner ── */}
       {showAlert && (
