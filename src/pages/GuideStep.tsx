@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams, Navigate } from 'react-router-dom'
 import {
-  ArrowLeft, Copy, Check, MessageCircle, Mail, Instagram, Phone,
+  ArrowLeft, Copy, Check, MessageCircle, Mail, AtSign, Phone,
   ClipboardList, Video, FileText, FileSignature, Rocket, BookOpen,
   CheckCircle2, Circle, ChevronRight, Sparkles, AlertCircle,
 } from 'lucide-react'
@@ -20,7 +20,7 @@ const ICONS: Record<string, React.ElementType> = {
 const CHANNEL_META: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   whatsapp:  { icon: MessageCircle, label: 'WhatsApp',  color: 'emerald' },
   email:     { icon: Mail,          label: 'Email',     color: 'blue' },
-  instagram: { icon: Instagram,     label: 'Instagram', color: 'pink' },
+  instagram: { icon: AtSign,     label: 'AtSign', color: 'pink' },
   sms:       { icon: Phone,         label: 'SMS',       color: 'violet' },
   general:   { icon: BookOpen,      label: 'Général',   color: 'slate' },
 }
