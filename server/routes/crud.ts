@@ -87,10 +87,20 @@ router.get('/:table/:id', async (req: Request, res: Response) => {
   }
 })
 
-/* Empty string → null (Postgres rejects "" for date/numeric/uuid/enum columns) */
+/* Empty string → null (Postgres rejects "" for date/numeric/uuid/enum columns).
+   Arrays/plain objects → JSON string (for jsonb columns — sans cast, pg-node
+   les sérialise en syntaxe array Postgres `{a,b}` qui échoue côté jsonb avec
+   "Expected ':', but found ','"). */
 function normalizeValues(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(obj).map(([k, v]) => [k, v === '' ? null : v])
+    Object.entries(obj).map(([k, v]) => {
+      if (v === '') return [k, null]
+      if (v === null || v === undefined) return [k, v]
+      if (Array.isArray(v) || (typeof v === 'object' && (v as object).constructor === Object)) {
+        return [k, JSON.stringify(v)]
+      }
+      return [k, v]
+    })
   )
 }
 
