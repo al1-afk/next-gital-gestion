@@ -86,6 +86,9 @@ const TABLE_ACL: Record<string, Record<Action, Role[]>> = {
   /* SOPs — lecture pour tous, création/édition admin+manager,
      suppression admin uniquement */
   sops:                      matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  /* Stagiaires — lecture pour tous, création/édition admin+manager,
+     suppression admin uniquement */
+  stagiaires:                matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
 }
 
 export function canTableAction(role: Role, table: string, action: Action): boolean {

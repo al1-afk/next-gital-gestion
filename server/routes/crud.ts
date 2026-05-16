@@ -23,6 +23,8 @@ const ALLOWED_TABLES = new Set([
   'guide_discovery_questions', 'tenant_vision',
   /* SOPs personnalisés (Procédures internes) */
   'sops',
+  /* Stagiaires (Équipe → onglet Stagiaires) */
+  'stagiaires',
 ])
 
 const isProd = process.env.NODE_ENV === 'production'

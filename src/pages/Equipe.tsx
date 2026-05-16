@@ -7,7 +7,9 @@ import {
   Lock, Eye, Pencil, Trash, Download, ShieldCheck, TrendingUp,
   ClipboardList, ChevronDown, AlertCircle, CheckCircle2, Clock,
   FileText, Banknote, Wallet, KeyRound, RotateCcw, Save, AlertTriangle,
+  GraduationCap,
 } from 'lucide-react'
+import { StagiairesTab } from '@/components/equipe/StagiairesTab'
 import { tenantApi } from '@/lib/api'
 import { ALL_MODULES } from '@/components/layout/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
@@ -1220,6 +1222,9 @@ export default function Equipe() {
           <TabsTrigger value="salaires">
             <Banknote className="w-4 h-4 mr-1.5" /> Salaires
           </TabsTrigger>
+          <TabsTrigger value="stagiaires">
+            <GraduationCap className="w-4 h-4 mr-1.5" /> Stagiaires
+          </TabsTrigger>
           <TabsTrigger value="invitations">
             <UserPlus className="w-4 h-4 mr-1.5" /> Invitations
           </TabsTrigger>
@@ -1334,6 +1339,11 @@ export default function Equipe() {
         {/* ── Salaires ── */}
         <TabsContent value="salaires" className="mt-4">
           <SalairesTab members={members} />
+        </TabsContent>
+
+        {/* ── Stagiaires ── */}
+        <TabsContent value="stagiaires" className="mt-4">
+          <StagiairesTab />
         </TabsContent>
 
         {/* ── Invitations ── */}
