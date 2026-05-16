@@ -1,4 +1,16 @@
-FROM node:20-alpine
+## ──────────────────────────────────────────────────────────────────────
+##  GestiQ API — image Express + tsx (Node 20)
+##
+##  IMPORTANT : on utilise `node:20-bookworm-slim` (Debian + glibc) au
+##  lieu de `node:20-alpine` (musl libc). Musl ne résout PAS
+##  correctement les alias DNS internes de Docker Swarm (cas typique :
+##  un service ne peut pas résoudre l'hostname d'un autre service même
+##  si `getent hosts` y arrive), ce qui se manifeste par
+##  `getaddrinfo ENOTFOUND new-gestion-newgestiondb-…` dans les logs.
+##
+##  bookworm-slim ajoute ~50 MB mais résout proprement les DNS Swarm.
+## ──────────────────────────────────────────────────────────────────────
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
@@ -6,6 +18,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY server ./server
+COPY supabase ./supabase
 COPY tsconfig.json tsconfig.node.json ./
 
 ENV NODE_ENV=production
