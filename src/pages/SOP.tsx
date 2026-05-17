@@ -16,6 +16,11 @@ import { Trash2 } from 'lucide-react'
 import SopEditor from '@/components/SopEditor'
 import { useSops, useDeleteSop, type Sop as DbSop } from '@/hooks/useSops'
 import { useAuth } from '@/hooks/useAuth'
+import { parseRichText } from '@/components/sop/parseRichText'
+import { SopShareDialog } from '@/components/sop/SopShareDialog'
+import { SopTrainingMode } from '@/components/sop/SopTrainingMode'
+import { useSopShares } from '@/hooks/useSopCollab'
+import { GraduationCap } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════════
    TYPES
@@ -34,15 +39,31 @@ interface Category {
 }
 
 type BlockType =
-  | 'heading' | 'paragraph' | 'list' | 'checklist' | 'steps'
+  | 'heading' | 'heading2' | 'heading3'
+  | 'paragraph' | 'list' | 'numbered' | 'checklist' | 'steps'
   | 'callout' | 'template' | 'code' | 'divider'
+  | 'image' | 'table' | 'quote'
+
+interface SOPImageMeta {
+  url:     string
+  caption?:string
+  size?:   'small' | 'medium' | 'large' | 'full'
+  align?:  'left' | 'center' | 'right'
+}
+
+interface SOPTableMeta {
+  headers: string[]
+  rows:    string[][]
+}
 
 interface SOPBlock {
   type:    BlockType
   text?:   string
   items?:  string[]
-  variant?:'info' | 'warning' | 'success' | 'tip'
+  variant?:'info' | 'warning' | 'success' | 'tip' | 'danger'
   title?:  string
+  image?:  SOPImageMeta
+  table?:  SOPTableMeta
 }
 
 interface SOP {
@@ -120,15 +141,27 @@ export default function SOPPage() {
   const [favs,       setFavs]       = useState<string[]>(loadFavs)
   const [activeTag,  setActiveTag]  = useState<string | null>(null)
   const [onlyFavs,   setOnlyFavs]   = useState(false)
+  const [onlyShared, setOnlyShared] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingSop, setEditingSop] = useState<DbSop | null>(null)
+  const [shareSopId, setShareSopId] = useState<string | null>(null)
+  const [trainSopId, setTrainSopId] = useState<string | null>(null)
 
-  const { role } = useAuth()
+  const { role, userId } = useAuth()
   const canEdit  = role === 'admin' || role === 'manager'
   const canDelete = role === 'admin'
 
   const { data: dbSops = [] } = useSops()
+  const { data: sopShares = [] } = useSopShares()
   const deleteSop = useDeleteSop()
+
+  /* SOPs partagés avec moi (via sop_shares dont shared_with = userId) */
+  const sharedWithMeIds = useMemo(() => {
+    if (!userId) return new Set<string>()
+    return new Set(
+      sopShares.filter(s => s.shared_with === userId && s.is_active).map(s => s.sop_id),
+    )
+  }, [sopShares, userId])
 
   /* SOPs combinés : ceux créés par l'utilisateur (DB) en premier, puis les exemples statiques */
   const ALL_SOPS = useMemo<(SOP & { isUserCreated?: boolean; dbId?: string })[]>(
@@ -149,6 +182,7 @@ export default function SOPPage() {
     let list = ALL_SOPS
     if (activeCat !== 'home') list = list.filter(s => s.category === activeCat)
     if (onlyFavs) list = list.filter(s => favs.includes(s.id))
+    if (onlyShared) list = list.filter(s => sharedWithMeIds.has(s.id))
     if (activeTag) list = list.filter(s => s.tags.includes(activeTag))
     if (query.trim()) {
       const q = query.toLowerCase()
@@ -159,7 +193,7 @@ export default function SOPPage() {
       )
     }
     return list
-  }, [ALL_SOPS, activeCat, query, favs, onlyFavs, activeTag])
+  }, [ALL_SOPS, activeCat, query, favs, onlyFavs, onlyShared, sharedWithMeIds, activeTag])
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
@@ -288,7 +322,7 @@ export default function SOPPage() {
           {/* Toggle favoris */}
           <div className="border-t border-border mt-3 pt-3 px-2 space-y-1">
             <button
-              onClick={() => { setOnlyFavs(v => !v); setOpenId(null) }}
+              onClick={() => { setOnlyFavs(v => !v); setOnlyShared(false); setOpenId(null) }}
               className={cn(
                 'w-full flex items-center gap-2 px-2 py-2 rounded-lg text-[13px] font-medium transition-all',
                 onlyFavs ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'text-muted-foreground hover:bg-muted/60'
@@ -297,6 +331,17 @@ export default function SOPPage() {
               <Star className={cn('w-3.5 h-3.5', onlyFavs && 'fill-amber-500 text-amber-500')} />
               Favoris uniquement
               <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded-md">{favs.length}</span>
+            </button>
+            <button
+              onClick={() => { setOnlyShared(v => !v); setOnlyFavs(false); setOpenId(null) }}
+              className={cn(
+                'w-full flex items-center gap-2 px-2 py-2 rounded-lg text-[13px] font-medium transition-all',
+                onlyShared ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'text-muted-foreground hover:bg-muted/60'
+              )}
+            >
+              <Share2 className={cn('w-3.5 h-3.5', onlyShared && 'text-blue-500')} />
+              Partagé avec moi
+              <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded-md">{sharedWithMeIds.size}</span>
             </button>
           </div>
         </aside>
@@ -317,6 +362,11 @@ export default function SOPPage() {
                   isFav={favs.includes(openedSOP.id)}
                   onClose={() => setOpenId(null)}
                   onToggleFav={() => toggleFav(openedSOP.id)}
+                  onShare={() => setShareSopId(openedSOP.dbId ?? null)}
+                  onTrain={() => setTrainSopId(openedSOP.dbId ?? null)}
+                  onEdit={() => handleEdit(openedSOP)}
+                  canEdit={canEdit && !!openedSOP.dbId}
+                  canShare={!!openedSOP.dbId}
                 />
               </motion.div>
             ) : (
@@ -537,6 +587,21 @@ export default function SOPPage() {
         initialCategory={activeCat}
         onClose={() => { setEditorOpen(false); setEditingSop(null) }}
       />
+
+      {/* Dialog partage */}
+      <SopShareDialog
+        open={!!shareSopId}
+        sopId={shareSopId}
+        sopTitle={ALL_SOPS.find(s => s.id === shareSopId)?.title || ''}
+        onClose={() => setShareSopId(null)}
+      />
+
+      {/* Mode formation */}
+      <SopTrainingMode
+        open={!!trainSopId}
+        sop={trainSopId ? (dbSops.find(s => s.id === trainSopId) ?? null) : null}
+        onClose={() => setTrainSopId(null)}
+      />
     </div>
   )
 }
@@ -660,8 +725,16 @@ function SOPCard({ sop, isFav, onOpen, onToggleFav, delay = 0, onEdit, onDelete,
 /* ═══════════════════════════════════════════════════════════════════
    SOP DETAIL (Notion-like)
    ═══════════════════════════════════════════════════════════════════ */
-function SOPDetail({ sop, isFav, onClose, onToggleFav }: {
-  sop: SOP; isFav: boolean; onClose: () => void; onToggleFav: () => void
+function SOPDetail({ sop, isFav, onClose, onToggleFav, onShare, onTrain, onEdit, canEdit, canShare }: {
+  sop:        SOP
+  isFav:      boolean
+  onClose:    () => void
+  onToggleFav:() => void
+  onShare?:   () => void
+  onTrain?:   () => void
+  onEdit?:    () => void
+  canEdit?:   boolean
+  canShare?:  boolean
 }) {
   const cat = CATEGORIES.find(c => c.key === sop.category)!
   const [checked, setChecked] = useState<Record<string, boolean>>({})
@@ -693,15 +766,24 @@ function SOPDetail({ sop, isFav, onClose, onToggleFav }: {
               : <Bookmark className="w-3.5 h-3.5" />}
             {isFav ? 'Favori' : 'Ajouter aux favoris'}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => toast.success('Lien copié')}>
-            <Share2 className="w-3.5 h-3.5" /> Partager
-          </Button>
+          {canShare && onShare && (
+            <Button variant="ghost" size="sm" onClick={onShare}>
+              <Share2 className="w-3.5 h-3.5" /> Partager
+            </Button>
+          )}
+          {onTrain && (
+            <Button variant="ghost" size="sm" onClick={onTrain}>
+              <GraduationCap className="w-3.5 h-3.5" /> Formation
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={() => toast.success('Bientôt : export PDF')}>
             <Download className="w-3.5 h-3.5" /> PDF
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => toast.success('Bientôt : édition')}>
-            <Pencil className="w-3.5 h-3.5" /> Modifier
-          </Button>
+          {canEdit && onEdit && (
+            <Button variant="secondary" size="sm" onClick={onEdit}>
+              <Pencil className="w-3.5 h-3.5" /> Modifier
+            </Button>
+          )}
         </div>
       </div>
 
@@ -790,16 +872,37 @@ function BlockRenderer({ block, blockKey, checked, onCheck, onCopy }: {
   switch (block.type) {
     case 'heading':
       return (
-        <h2 className="text-lg font-bold text-foreground mt-4 mb-2 tracking-tight">
-          {block.text}
+        <h2 className="text-xl font-extrabold text-foreground mt-4 mb-2 tracking-tight">
+          {parseRichText(block.text)}
         </h2>
+      )
+
+    case 'heading2':
+      return (
+        <h3 className="text-lg font-bold text-foreground mt-3 mb-2 tracking-tight">
+          {parseRichText(block.text)}
+        </h3>
+      )
+
+    case 'heading3':
+      return (
+        <h4 className="text-base font-bold text-foreground mt-2 mb-1.5 tracking-tight">
+          {parseRichText(block.text)}
+        </h4>
       )
 
     case 'paragraph':
       return (
         <p className="text-[15px] text-foreground/85 leading-relaxed whitespace-pre-line">
-          {block.text}
+          {parseRichText(block.text)}
         </p>
+      )
+
+    case 'quote':
+      return (
+        <blockquote className="border-l-4 border-blue-500 pl-4 py-2 italic text-foreground/80 bg-blue-50/30 dark:bg-blue-950/20 rounded-r-lg">
+          {parseRichText(block.text)}
+        </blockquote>
       )
 
     case 'list':
@@ -808,10 +911,21 @@ function BlockRenderer({ block, blockKey, checked, onCheck, onCopy }: {
           {block.items?.map((item, i) => (
             <li key={i} className="flex items-start gap-2.5 text-[15px] text-foreground/85">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
-              <span className="flex-1">{item}</span>
+              <span className="flex-1">{parseRichText(item)}</span>
             </li>
           ))}
         </ul>
+      )
+
+    case 'numbered':
+      return (
+        <ol className="space-y-1.5 list-decimal pl-6">
+          {block.items?.map((item, i) => (
+            <li key={i} className="text-[15px] text-foreground/85 pl-1">
+              {parseRichText(item)}
+            </li>
+          ))}
+        </ol>
       )
 
     case 'checklist':
@@ -864,21 +978,60 @@ function BlockRenderer({ block, blockKey, checked, onCheck, onCopy }: {
 
     case 'callout': {
       const variants = {
-        info:    { bg: 'bg-blue-50 dark:bg-blue-900/20',       border: 'border-blue-200 dark:border-blue-800/50',     icon: 'text-blue-500',    iconBg: 'bg-blue-100 dark:bg-blue-900/40' },
-        warning: { bg: 'bg-amber-50 dark:bg-amber-900/20',     border: 'border-amber-200 dark:border-amber-800/50',   icon: 'text-amber-500',   iconBg: 'bg-amber-100 dark:bg-amber-900/40' },
-        success: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800/50', icon: 'text-emerald-500', iconBg: 'bg-emerald-100 dark:bg-emerald-900/40' },
-        tip:     { bg: 'bg-violet-50 dark:bg-violet-900/20',   border: 'border-violet-200 dark:border-violet-800/50', icon: 'text-violet-500',  iconBg: 'bg-violet-100 dark:bg-violet-900/40' },
+        info:    { bg: 'bg-blue-50 dark:bg-blue-900/20',       border: 'border-blue-200 dark:border-blue-800/50',     icon: 'text-blue-500',    iconBg: 'bg-blue-100 dark:bg-blue-900/40',    emoji: 'ℹ️' },
+        warning: { bg: 'bg-amber-50 dark:bg-amber-900/20',     border: 'border-amber-200 dark:border-amber-800/50',   icon: 'text-amber-500',   iconBg: 'bg-amber-100 dark:bg-amber-900/40',  emoji: '⚠️' },
+        danger:  { bg: 'bg-rose-50 dark:bg-rose-900/20',       border: 'border-rose-200 dark:border-rose-800/50',     icon: 'text-rose-500',    iconBg: 'bg-rose-100 dark:bg-rose-900/40',    emoji: '🚨' },
+        success: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800/50', icon: 'text-emerald-500', iconBg: 'bg-emerald-100 dark:bg-emerald-900/40', emoji: '✅' },
+        tip:     { bg: 'bg-violet-50 dark:bg-violet-900/20',   border: 'border-violet-200 dark:border-violet-800/50', icon: 'text-violet-500',  iconBg: 'bg-violet-100 dark:bg-violet-900/40',  emoji: '💡' },
       }
       const v = variants[block.variant || 'info']
       return (
         <div className={cn('rounded-2xl border p-4 flex gap-3', v.bg, v.border)}>
-          <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', v.iconBg)}>
-            <Sparkles className={cn('w-4 h-4', v.icon)} />
+          <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg', v.iconBg)}>
+            <span>{v.emoji}</span>
           </div>
           <div className="flex-1 min-w-0">
             {block.title && <p className="font-semibold text-sm text-foreground mb-1">{block.title}</p>}
-            <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{block.text}</p>
+            <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">{parseRichText(block.text)}</p>
           </div>
+        </div>
+      )
+    }
+
+    case 'image': {
+      const img = block.image
+      if (!img?.url) return null
+      const sizeClass = img.size === 'small' ? 'max-w-xs' : img.size === 'medium' ? 'max-w-sm' : img.size === 'large' ? 'max-w-md' : 'w-full'
+      const alignClass = img.align === 'left' ? 'mr-auto' : img.align === 'right' ? 'ml-auto' : 'mx-auto'
+      return (
+        <figure className={cn('my-2', sizeClass, alignClass)}>
+          <img src={img.url} alt={img.caption ?? ''} className="w-full rounded-lg border border-border shadow-sm" />
+          {img.caption && <figcaption className="text-xs text-muted-foreground text-center mt-1.5 italic">{img.caption}</figcaption>}
+        </figure>
+      )
+    }
+
+    case 'table': {
+      const t = block.table
+      if (!t || t.rows.length === 0) return null
+      return (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>{t.headers.map((h, i) => (
+                <th key={i} className="px-3 py-2 text-left font-semibold text-foreground border-b border-border">{h}</th>
+              ))}</tr>
+            </thead>
+            <tbody>
+              {t.rows.map((row, r) => (
+                <tr key={r} className="border-b border-border/50 last:border-b-0 hover:bg-muted/20">
+                  {row.map((cell, c) => (
+                    <td key={c} className="px-3 py-2 text-foreground/85">{parseRichText(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )
     }
@@ -899,7 +1052,7 @@ function BlockRenderer({ block, blockKey, checked, onCheck, onCopy }: {
             </button>
           </div>
           <pre className="p-4 text-[13px] text-foreground/90 whitespace-pre-wrap font-sans leading-relaxed">
-            {block.text}
+            {parseRichText(block.text)}
           </pre>
         </div>
       )

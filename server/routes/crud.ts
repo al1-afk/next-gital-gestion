@@ -23,6 +23,9 @@ const ALLOWED_TABLES = new Set([
   'guide_discovery_questions', 'tenant_vision',
   /* SOPs personnalisés (Procédures internes) */
   'sops',
+  /* Collaboration SOP : partage + suivi formation */
+  'sop_shares',
+  'sop_training_progress',
   /* Stagiaires (Équipe → onglet Stagiaires) */
   'stagiaires',
 ])

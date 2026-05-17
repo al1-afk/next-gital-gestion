@@ -78,7 +78,9 @@ app.use(cors((req, cb) => {
 }))
 
 /* ── Body parsing + sanitization ────────────────────────────── */
-app.use(express.json({ limit: '1mb' }))
+/* 12 MB pour accepter les images base64 stockées inline dans les blocs
+   SOP (limite max 10 MB côté éditeur + marge de sérialisation JSON). */
+app.use(express.json({ limit: '12mb' }))
 app.use(sanitizeBody)
 
 /* ── Global rate limit ───────────────────────────────────────── */

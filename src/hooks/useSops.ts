@@ -4,15 +4,46 @@ import { currentTenantIdForCache } from '@/lib/authToken'
 import { toast } from 'sonner'
 
 export type SopBlockType =
-  | 'heading' | 'paragraph' | 'list' | 'checklist' | 'steps'
+  | 'heading' | 'heading2' | 'heading3'
+  | 'paragraph' | 'list' | 'numbered' | 'checklist' | 'steps'
   | 'callout' | 'template' | 'code' | 'divider'
+  | 'image' | 'table' | 'quote'
+
+/* Marks pour formatage inline (paragraphes, headings, items de liste).
+   Stockées dans block.marks et appliquées au rendu via parseRichText.
+   Format simple : balises markdown-like dans block.text :
+   **gras**, *italique*, __souligné__, ~barré~, [texte](url),
+   {{color:red}}texte{{/color}}                                    */
+
+export interface SopImageMeta {
+  url:     string                                 // data:image/...;base64,...
+  caption?:string
+  size?:   'small' | 'medium' | 'large' | 'full'  // largeur visuelle
+  align?:  'left' | 'center' | 'right'
+}
+
+export interface SopTableMeta {
+  headers: string[]
+  rows:    string[][]                             // rows[row][col]
+}
+
+export interface SopStepItem {
+  text:   string
+  icon?:  string                                  // emoji ou nom lucide
+  time?:  string                                  // "5 min", "1h"
+  status?:'required' | 'recommended' | 'optional'
+  assignee?: string                               // member id
+}
 
 export interface SopBlock {
   type:    SopBlockType
   text?:   string
-  items?:  string[]
-  variant?:'info' | 'warning' | 'success' | 'tip'
+  items?:  string[]                               // pour list/numbered/checklist (compat back)
+  steps?:  SopStepItem[]                          // pour steps enrichis
+  variant?:'info' | 'warning' | 'success' | 'tip' | 'danger'
   title?:  string
+  image?:  SopImageMeta
+  table?:  SopTableMeta
 }
 
 export interface Sop {

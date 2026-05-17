@@ -204,6 +204,8 @@ export const tenantVisionApi            = tableApi('tenant_vision')
 
 /* ── SOPs personnalisés ─────────────────────────────────────── */
 export const sopsApi                    = tableApi('sops')
+export const sopSharesApi               = tableApi('sop_shares')
+export const sopTrainingApi             = tableApi('sop_training_progress')
 
 /* ── Stagiaires (onglet Équipe) ─────────────────────────────── */
 export const stagiairesApi              = tableApi('stagiaires')

@@ -86,6 +86,12 @@ const TABLE_ACL: Record<string, Record<Action, Role[]>> = {
   /* SOPs — lecture pour tous, création/édition admin+manager,
      suppression admin uniquement */
   sops:                      matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
+  /* Partages SOP — lecture pour tous, partage/édition admin+manager,
+     suppression admin+manager (le propriétaire peut révoquer) */
+  sop_shares:                matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin','manager']),
+  /* Progression formation SOP — CRUD ouvert à tous (RLS + tenant_id
+     assurent l'isolation, et chaque user gère sa propre progression) */
+  sop_training_progress:     rw(ALL),
   /* Stagiaires — lecture pour tous, création/édition admin+manager,
      suppression admin uniquement */
   stagiaires:                matrix(ALL,                  ['admin','manager'], ['admin','manager'], ['admin']),
