@@ -22,15 +22,19 @@ interface Props {
 }
 
 const CATEGORY_OPTIONS = [
-  { key: 'whatsapp',   label: 'Scripts WhatsApp' },
-  { key: 'quick',      label: 'Réponses rapides' },
-  { key: 'sales',      label: 'Process Commercial' },
-  { key: 'onboarding', label: 'Onboarding Client' },
-  { key: 'delivery',   label: 'Livraison Projet' },
-  { key: 'support',    label: 'Support Client' },
-  { key: 'marketing',  label: 'Marketing & Ads' },
-  { key: 'faq',        label: 'FAQ Interne' },
-  { key: 'ai',         label: 'IA & Automatisation' },
+  { key: 'whatsapp',    label: 'Scripts WhatsApp' },
+  { key: 'quick',       label: 'Réponses rapides' },
+  { key: 'sales',       label: 'Process Commercial' },
+  { key: 'onboarding',  label: 'Onboarding Client' },
+  { key: 'delivery',    label: 'Livraison Projet' },
+  { key: 'support',     label: 'Support Client' },
+  { key: 'marketing',   label: 'Marketing & Ads' },
+  { key: 'faq',         label: 'FAQ Interne' },
+  { key: 'ai',          label: 'IA & Automatisation' },
+  { key: 'projets',     label: 'Chef de projet' },
+  { key: 'dev',         label: 'Développeur' },
+  { key: 'media_buyer', label: 'Media Buyer' },
+  { key: 'prospection', label: 'Prospection' },
 ]
 
 interface BlockTypeDef {

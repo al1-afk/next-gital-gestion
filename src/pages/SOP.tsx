@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  BookOpen, MessageSquare, Zap, Briefcase, UserPlus, Rocket, LifeBuoy, FolderKanban,
+  BookOpen, MessageSquare, Zap, Briefcase, UserPlus, Rocket, LifeBuoy, FolderKanban, Code2,
   Megaphone, HelpCircle, Sparkles, Home, Search, Star, Clock,
   Filter, Plus, ChevronRight, Copy, Share2, Pencil, Download,
   CheckCircle2, ArrowLeft, FileText, Tag as TagIcon, Eye,
-  TrendingUp, Bookmark, BookmarkCheck, MoreHorizontal, Users,
+  TrendingUp, Bookmark, BookmarkCheck, MoreHorizontal, Users, UserSearch,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
@@ -27,7 +27,8 @@ import { GraduationCap } from 'lucide-react'
    ═══════════════════════════════════════════════════════════════════ */
 type CategoryKey =
   | 'home' | 'whatsapp' | 'quick' | 'sales' | 'onboarding'
-  | 'delivery' | 'support' | 'marketing' | 'faq' | 'ai' | 'projets'
+  | 'delivery' | 'support' | 'marketing' | 'faq' | 'ai' | 'projets' | 'dev'
+  | 'media_buyer' | 'prospection'
 
 interface Category {
   key:   CategoryKey
@@ -96,6 +97,9 @@ const CATEGORIES: Category[] = [
   { key: 'faq',        label: 'FAQ Interne',         icon: HelpCircle,   color: 'text-teal-600 dark:text-teal-400',       bg: 'bg-teal-50 dark:bg-teal-900/20',       desc: 'Questions fréquentes équipe'   },
   { key: 'ai',         label: 'IA & Automatisation', icon: Sparkles,     color: 'text-purple-600 dark:text-purple-400',   bg: 'bg-purple-50 dark:bg-purple-900/20',   desc: 'Workflows IA & prompts'        },
   { key: 'projets',    label: 'Chef de projet',      icon: FolderKanban, color: 'text-violet-700 dark:text-violet-300',   bg: 'bg-violet-50 dark:bg-violet-900/20',   desc: 'Ouverture, suivi, livraison, KPIs' },
+  { key: 'dev',        label: 'Développeur',         icon: Code2,        color: 'text-sky-700 dark:text-sky-300',         bg: 'bg-sky-50 dark:bg-sky-900/20',         desc: 'WordPress, Dokploy, Titan, IA' },
+  { key: 'media_buyer',label: 'Media Buyer',         icon: Megaphone,    color: 'text-amber-700 dark:text-amber-300',     bg: 'bg-amber-50 dark:bg-amber-900/20',     desc: 'Facebook, TikTok, Google Ads, GMB' },
+  { key: 'prospection',label: 'Prospection',         icon: UserSearch,   color: 'text-teal-700 dark:text-teal-300',       bg: 'bg-teal-50 dark:bg-teal-900/20',       desc: 'LinkedIn, WhatsApp, terrain, partenariats' },
 ]
 
 /* SOPs statiques retirés au profit du seeding DB (migration 026) */
