@@ -209,3 +209,6 @@ export const sopTrainingApi             = tableApi('sop_training_progress')
 
 /* ── Stagiaires (onglet Équipe) ─────────────────────────────── */
 export const stagiairesApi              = tableApi('stagiaires')
+
+/* ── Projets (gestion de projets clients & internes) ─────────── */
+export const projetsApi                 = tableApi('projets')

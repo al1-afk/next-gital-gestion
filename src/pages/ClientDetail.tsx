@@ -7,7 +7,7 @@ import {
   CreditCard, FileCheck, DollarSign, Package, Upload,
   ChevronDown, ChevronRight, Calendar,
   Loader2, AlertCircle, Circle, CheckCircle2, AlertTriangle,
-  TrendingUp, Star,
+  TrendingUp, Star, FolderKanban,
 } from 'lucide-react'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useClients, useUpdateClient, useDeleteClient, type Client } from '@/hooks/useClients'
 import { useFactures }  from '@/hooks/useFactures'
 import { useDevis }     from '@/hooks/useDevis'
+import { useProjets }   from '@/hooks/useProjets'
 import { formatDate, formatCurrency, getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -188,11 +189,13 @@ export default function ClientDetail() {
   const { data: clients = [] }      = useClients()
   const { data: allFactures = [] }  = useFactures()
   const { data: allDevis = [] }     = useDevis()
+  const { data: allProjets = [] }   = useProjets()
   const deleteClient = useDeleteClient()
 
   const client   = clients.find(c => c.id === id)
   const factures = useMemo(() => allFactures.filter(f => f.client_id === id), [allFactures, id])
   const devis    = useMemo(() => allDevis.filter(d => d.client_id === id),    [allDevis, id])
+  const projets  = useMemo(() => allProjets.filter(p => p.client_id === id),  [allProjets, id])
 
   const [tasks,      setTasks]      = useState<{ id: string; titre: string; done: boolean }[]>([])
   const [notes,      setNotes]      = useState<ClientNote[]>([
@@ -337,10 +340,11 @@ export default function ClientDetail() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'CA Encaissé',  value: formatCurrency(totalCA),    icon: TrendingUp,  color: '#10b981', bg: '#10b98112' },
           { label: 'En attente',   value: formatCurrency(enAttente),  icon: Clock,       color: '#f59e0b', bg: '#f59e0b12' },
+          { label: 'Projets',      value: String(projets.length),     icon: FolderKanban,color: '#6366f1', bg: '#6366f112' },
           { label: 'Factures',     value: String(factures.length),    icon: Receipt,     color: '#3b82f6', bg: '#3b82f612' },
           { label: 'Devis',        value: String(devis.length),       icon: FileCheck,   color: '#8b5cf6', bg: '#8b5cf612' },
         ].map(({ label, value, icon: Icon, color, bg }) => (
@@ -446,6 +450,60 @@ export default function ClientDetail() {
                     </button>
                   </div>
                 ))
+            }
+          </Section>
+
+          {/* Projets */}
+          <Section title="Projets" icon={FolderKanban} count={projets.length} color="#6366f1"
+            action={{ label: 'Nouveau projet', onClick: () => navigate(`${base}/projets`) }}
+          >
+            {projets.length === 0
+              ? <EmptyState label="Aucun projet pour ce client" icon={FolderKanban} />
+              : projets.map(p => {
+                  const statutColors: Record<string, { bg: string; color: string; label: string }> = {
+                    planifie: { bg: 'bg-blue-500/10',    color: 'text-blue-600 dark:text-blue-400',       label: 'Planifié' },
+                    en_cours: { bg: 'bg-amber-500/10',   color: 'text-amber-600 dark:text-amber-400',     label: 'En cours' },
+                    en_pause: { bg: 'bg-muted',          color: 'text-muted-foreground',                  label: 'En pause' },
+                    termine:  { bg: 'bg-emerald-500/10', color: 'text-emerald-600 dark:text-emerald-400', label: 'Terminé'  },
+                    annule:   { bg: 'bg-red-500/10',     color: 'text-red-600 dark:text-red-400',         label: 'Annulé'   },
+                  }
+                  const s = statutColors[p.statut] ?? statutColors.planifie
+                  return (
+                    <div key={p.id} className="py-3 border-b border-border last:border-0 hover:bg-muted/20 -mx-2 px-2 rounded-lg transition-colors">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">{p.nom}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {p.date_debut && formatDate(p.date_debut)}
+                            {p.date_debut && p.date_fin_prevue && ' → '}
+                            {p.date_fin_prevue && formatDate(p.date_fin_prevue)}
+                            {p.responsable && ` · ${p.responsable}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${s.bg} ${s.color}`}>{s.label}</span>
+                          {(p.budget ?? 0) > 0 && (
+                            <span className="text-sm font-bold text-foreground hidden sm:inline">{formatCurrency(p.budget ?? 0)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${p.progression}%`,
+                              background: p.progression === 100
+                                ? 'linear-gradient(90deg, #10b981, #34d399)'
+                                : 'linear-gradient(90deg, #6366f1, #818cf8)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[11px] font-semibold text-muted-foreground w-9 text-right">{p.progression}%</span>
+                      </div>
+                    </div>
+                  )
+                })
             }
           </Section>
 

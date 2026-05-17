@@ -28,6 +28,8 @@ const ALLOWED_TABLES = new Set([
   'sop_training_progress',
   /* Stagiaires (Équipe → onglet Stagiaires) */
   'stagiaires',
+  /* Projets (gestion de projets clients & internes) */
+  'projets',
 ])
 
 const isProd = process.env.NODE_ENV === 'production'

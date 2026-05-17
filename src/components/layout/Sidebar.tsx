@@ -7,7 +7,7 @@ import {
   Repeat, BarChart3, CheckSquare, Building2, ChevronDown,
   Settings, Briefcase, Banknote, Wallet, Activity, X,
   Bot, CalendarDays, Zap, RefreshCcw, PlugZap, FileDown, Rocket, Boxes, Car, Target, Sparkles,
-  BookOpen, Crown, MapPin,
+  BookOpen, Crown, MapPin, FolderKanban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStockAlerts } from '@/hooks/useStock'
@@ -31,6 +31,7 @@ export const ALL_MODULES: { key: string; label: string }[] = [
   { key: 'prospects',         label: 'CRM / Prospects' },
   { key: 'clients',           label: 'Clients' },
   { key: 'taches',            label: 'Tâches' },
+  { key: 'projets',           label: 'Projets' },
   { key: 'calendrier',        label: 'Calendrier' },
   { key: 'planificateur',     label: 'Planificateur' },
   { key: 'devis',             label: 'Devis' },
@@ -70,6 +71,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { label: 'Ma Vision',       href: '/vision',    icon: Crown, module: 'vision', adminOnly: true },
       { label: 'CRM / Prospects', href: '/prospects', icon: UserCheck, badge: 'IA', module: 'prospects' },
       { label: 'Clients',         href: '/clients',   icon: Users, module: 'clients' },
+      { label: 'Projets',         href: '/projets',   icon: FolderKanban, module: 'projets' },
       { label: 'Tâches',          href: '/taches',    icon: CheckSquare, module: 'taches' },
       { label: 'Calendrier',      href: '/calendrier',icon: CalendarDays, module: 'calendrier' },
       { label: 'Planificateur',   href: '/planificateur', icon: Target, badge: 'New', module: 'planificateur' },

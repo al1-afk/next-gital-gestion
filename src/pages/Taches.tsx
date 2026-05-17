@@ -423,9 +423,11 @@ export default function Taches() {
   const [showForm, setShowForm]     = useState(false)
   const [showBriefing, setShowBriefing] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const todayISO = () => new Date().toISOString().split('T')[0]
   const [newAction, setNewAction]   = useState<Partial<Action>>({
     statut: 'todo', categorie: 'suivi', stage: 'actif',
-    deal_value: 0, revenue_at_risk: 0, churn_risk: 20
+    deal_value: 0, revenue_at_risk: 0, churn_risk: 20,
+    deadline: todayISO(),
   })
 
   // Enrichissement avec impact_score
@@ -487,21 +489,21 @@ export default function Taches() {
   }
 
   const addAction = () => {
-    if (!newAction.titre || !newAction.client) return
+    if (!newAction.titre?.trim()) return
     createMut.mutate({
-      titre:           newAction.titre!,
+      titre:           newAction.titre!.trim(),
       description:     newAction.description,
       statut:          'todo',
-      client:          newAction.client!,
+      client:          newAction.client?.trim() || '—',
       deal_value:      newAction.deal_value ?? 0,
       revenue_at_risk: newAction.revenue_at_risk ?? newAction.deal_value ?? 0,
       churn_risk:      newAction.churn_risk ?? 20,
-      deadline:        newAction.deadline,
+      deadline:        newAction.deadline || todayISO(),
       categorie:       newAction.categorie as Categorie ?? 'suivi',
       stage:           newAction.stage as Stage ?? 'actif',
       notes:           [],
     } as any, {
-      onSuccess: () => { setNewAction({ statut: 'todo', categorie: 'suivi', stage: 'actif', deal_value: 0, revenue_at_risk: 0, churn_risk: 20 }); setShowForm(false) },
+      onSuccess: () => { setNewAction({ statut: 'todo', categorie: 'suivi', stage: 'actif', deal_value: 0, revenue_at_risk: 0, churn_risk: 20, deadline: todayISO() }); setShowForm(false) },
     })
   }
 
@@ -914,11 +916,11 @@ export default function Taches() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="form-label">Client *</label>
+                <label className="form-label">Client <span className="text-muted-foreground font-normal">(optionnel)</span></label>
                 <Input
                   value={newAction.client ?? ''}
                   onChange={e => setNewAction(p => ({ ...p, client: e.target.value }))}
-                  placeholder="Nom du client"
+                  placeholder="Nom du client (facultatif)"
                 />
               </div>
               <div className="space-y-1.5">
@@ -960,10 +962,10 @@ export default function Taches() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="form-label">Échéance</label>
+                <label className="form-label">Échéance <span className="text-muted-foreground font-normal">(auto: aujourd'hui)</span></label>
                 <Input
                   type="date"
-                  value={newAction.deadline ?? ''}
+                  value={newAction.deadline ?? todayISO()}
                   onChange={e => setNewAction(p => ({ ...p, deadline: e.target.value }))}
                 />
               </div>
@@ -1021,7 +1023,7 @@ export default function Taches() {
 
             <div className="flex justify-end gap-3 pt-1">
               <Button variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button onClick={addAction} disabled={!newAction.titre || !newAction.client}>
+              <Button onClick={addAction} disabled={!newAction.titre?.trim()}>
                 Créer l'action
               </Button>
             </div>
