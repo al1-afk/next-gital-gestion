@@ -5,7 +5,7 @@ import {
   Megaphone, HelpCircle, Sparkles, Home, Search, Star, Clock,
   Filter, Plus, ChevronRight, Copy, Share2, Pencil, Download,
   CheckCircle2, ArrowLeft, FileText, Tag as TagIcon, Eye,
-  TrendingUp, Bookmark, BookmarkCheck, MoreHorizontal, Users, UserSearch,
+  TrendingUp, Bookmark, BookmarkCheck, MoreHorizontal, Users, UserSearch, Palette,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input }  from '@/components/ui/input'
@@ -28,7 +28,7 @@ import { GraduationCap } from 'lucide-react'
 type CategoryKey =
   | 'home' | 'whatsapp' | 'quick' | 'sales' | 'onboarding'
   | 'delivery' | 'support' | 'marketing' | 'faq' | 'ai' | 'projets' | 'dev'
-  | 'media_buyer' | 'prospection'
+  | 'media_buyer' | 'prospection' | 'designer'
 
 interface Category {
   key:   CategoryKey
@@ -100,6 +100,7 @@ const CATEGORIES: Category[] = [
   { key: 'dev',        label: 'Développeur',         icon: Code2,        color: 'text-sky-700 dark:text-sky-300',         bg: 'bg-sky-50 dark:bg-sky-900/20',         desc: 'WordPress, Dokploy, Titan, IA' },
   { key: 'media_buyer',label: 'Media Buyer',         icon: Megaphone,    color: 'text-amber-700 dark:text-amber-300',     bg: 'bg-amber-50 dark:bg-amber-900/20',     desc: 'Facebook, TikTok, Google Ads, GMB' },
   { key: 'prospection',label: 'Prospection',         icon: UserSearch,   color: 'text-teal-700 dark:text-teal-300',       bg: 'bg-teal-50 dark:bg-teal-900/20',       desc: 'LinkedIn, WhatsApp, terrain, partenariats' },
+  { key: 'designer',   label: 'Designer / Graphiste',icon: Palette,      color: 'text-rose-700 dark:text-rose-300',       bg: 'bg-rose-50 dark:bg-rose-900/20',       desc: 'Canva, Figma, charte, visuels, identité' },
 ]
 
 /* SOPs statiques retirés au profit du seeding DB (migration 026) */

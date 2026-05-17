@@ -35,6 +35,7 @@ const CATEGORY_OPTIONS = [
   { key: 'dev',         label: 'Développeur' },
   { key: 'media_buyer', label: 'Media Buyer' },
   { key: 'prospection', label: 'Prospection' },
+  { key: 'designer',    label: 'Designer / Graphiste' },
 ]
 
 interface BlockTypeDef {
