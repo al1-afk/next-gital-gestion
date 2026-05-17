@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  BookOpen, MessageSquare, Zap, Briefcase, UserPlus, Rocket, LifeBuoy,
+  BookOpen, MessageSquare, Zap, Briefcase, UserPlus, Rocket, LifeBuoy, FolderKanban,
   Megaphone, HelpCircle, Sparkles, Home, Search, Star, Clock,
   Filter, Plus, ChevronRight, Copy, Share2, Pencil, Download,
   CheckCircle2, ArrowLeft, FileText, Tag as TagIcon, Eye,
@@ -27,7 +27,7 @@ import { GraduationCap } from 'lucide-react'
    ═══════════════════════════════════════════════════════════════════ */
 type CategoryKey =
   | 'home' | 'whatsapp' | 'quick' | 'sales' | 'onboarding'
-  | 'delivery' | 'support' | 'marketing' | 'faq' | 'ai'
+  | 'delivery' | 'support' | 'marketing' | 'faq' | 'ai' | 'projets'
 
 interface Category {
   key:   CategoryKey
@@ -95,6 +95,7 @@ const CATEGORIES: Category[] = [
   { key: 'marketing',  label: 'Marketing & Ads',     icon: Megaphone,    color: 'text-orange-600 dark:text-orange-400',   bg: 'bg-orange-50 dark:bg-orange-900/20',   desc: 'Campagnes, retargeting, ROI'   },
   { key: 'faq',        label: 'FAQ Interne',         icon: HelpCircle,   color: 'text-teal-600 dark:text-teal-400',       bg: 'bg-teal-50 dark:bg-teal-900/20',       desc: 'Questions fréquentes équipe'   },
   { key: 'ai',         label: 'IA & Automatisation', icon: Sparkles,     color: 'text-purple-600 dark:text-purple-400',   bg: 'bg-purple-50 dark:bg-purple-900/20',   desc: 'Workflows IA & prompts'        },
+  { key: 'projets',    label: 'Chef de projet',      icon: FolderKanban, color: 'text-violet-700 dark:text-violet-300',   bg: 'bg-violet-50 dark:bg-violet-900/20',   desc: 'Ouverture, suivi, livraison, KPIs' },
 ]
 
 /* SOPs statiques retirés au profit du seeding DB (migration 026) */
