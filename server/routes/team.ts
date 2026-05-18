@@ -26,7 +26,8 @@ import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { query, queryOne, tenantQuery, tenantQueryOne } from '../db/pool'
-import { requireAuth, requireRole, signAccessToken, signRefreshToken } from '../middleware/auth'
+import { requireAuth, signAccessToken, signRefreshToken } from '../middleware/auth'
+import { NextFunction } from 'express'
 import { authLimiter } from '../middleware/security'
 import { sendEmail } from '../lib/email'
 import { teamInvitationEmail, teamPasswordResetEmail } from '../lib/email-team'
@@ -361,7 +362,34 @@ router.post('/auth/logout', requireAuth, async (req: Request, res: Response) => 
    ADMIN — MEMBER MANAGEMENT (requires admin/manager role)
    ════════════════════════════════════════════════════════════════════ */
 
-const requireAdminMgr = [requireAuth, requireRole('manager')]
+/* Custom guard: allow admin/manager OR the tenant owner.
+ * Falls back to checking tenant_users.role + tenants.owner_id so the
+ * founder is never locked out even if their JWT was issued with a
+ * lower role somehow. */
+async function requireTenantManager(req: Request, res: Response, next: NextFunction) {
+  const role = req.user?.role ?? ''
+  if (role === 'admin' || role === 'manager') return next()
+  if (role === 'team_member') {
+    return res.status(403).json({ error: 'Espace réservé aux administrateurs' })
+  }
+  /* Last resort: check if user is owner of this tenant */
+  try {
+    const owner = await queryOne<{ id: string }>(
+      `SELECT 1 AS id FROM public.tenants WHERE id = $1 AND owner_id = $2`,
+      [req.user?.tenantId, req.user?.userId],
+    )
+    if (owner) return next()
+    const tu = await queryOne<{ role: string }>(
+      `SELECT role FROM public.tenant_users WHERE tenant_id = $1 AND user_id = $2 AND status = 'active'`,
+      [req.user?.tenantId, req.user?.userId],
+    )
+    if (tu?.role === 'admin' || tu?.role === 'manager') return next()
+    return res.status(403).json({ error: 'Permissions insuffisantes (admin ou manager requis)' })
+  } catch {
+    return res.status(403).json({ error: 'Permissions insuffisantes' })
+  }
+}
+const requireAdminMgr = [requireAuth, requireTenantManager]
 
 /* POST /api/team/invite — create member + send invitation email */
 router.post('/invite', ...requireAdminMgr, async (req: Request, res: Response) => {
