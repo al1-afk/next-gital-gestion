@@ -52,6 +52,15 @@ const Guides              = lazy(() => import('@/pages/Guides'))
 const GuideStep           = lazy(() => import('@/pages/GuideStep'))
 const Vision              = lazy(() => import('@/pages/Vision'))
 
+/* Team member space (invite + login + dashboard) */
+const InviteAccept        = lazy(() => import('@/pages/InviteAccept'))
+const TeamLogin           = lazy(() => import('@/pages/TeamLogin'))
+const MySpaceLayout       = lazy(() => import('@/pages/MySpace/MySpaceLayout'))
+const MyDashboard         = lazy(() => import('@/pages/MySpace/MyDashboard'))
+const MySops              = lazy(() => import('@/pages/MySpace/MySops'))
+const MyTasks             = lazy(() => import('@/pages/MySpace/MyTasks'))
+const MyProfile           = lazy(() => import('@/pages/MySpace/MyProfile'))
+
 import { queryClient } from '@/lib/queryClient'
 
 function PageLoader() {
@@ -76,6 +85,16 @@ export default function App() {
             {/* ── Public routes ─────────────────────────────────── */}
             <Route path="/"     element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
+
+            {/* ── Team member: invite + login + personal space ───── */}
+            <Route path="/invite/:token" element={<InviteAccept />} />
+            <Route path="/team-login"    element={<TeamLogin />} />
+            <Route path="/my-space" element={<MySpaceLayout />}>
+              <Route index               element={<MyDashboard />} />
+              <Route path="sops"         element={<MySops />} />
+              <Route path="tasks"        element={<MyTasks />} />
+              <Route path="profile"      element={<MyProfile />} />
+            </Route>
 
             {/* ── Tenant workspace: gestiq.com/:tenantSlug/* ─────── */}
             <Route path="/:tenantSlug" element={

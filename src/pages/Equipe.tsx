@@ -10,6 +10,7 @@ import {
   GraduationCap,
 } from 'lucide-react'
 import { StagiairesTab } from '@/components/equipe/StagiairesTab'
+import TeamSpaceTab from '@/components/equipe/TeamSpaceTab'
 import { tenantApi } from '@/lib/api'
 import { ALL_MODULES } from '@/components/layout/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
@@ -1225,6 +1226,9 @@ export default function Equipe() {
           <TabsTrigger value="stagiaires">
             <GraduationCap className="w-4 h-4 mr-1.5" /> Stagiaires
           </TabsTrigger>
+          <TabsTrigger value="team-space">
+            <ShieldCheck className="w-4 h-4 mr-1.5" /> Espace équipe
+          </TabsTrigger>
           <TabsTrigger value="invitations">
             <UserPlus className="w-4 h-4 mr-1.5" /> Invitations
           </TabsTrigger>
@@ -1344,6 +1348,11 @@ export default function Equipe() {
         {/* ── Stagiaires ── */}
         <TabsContent value="stagiaires" className="mt-4">
           <StagiairesTab />
+        </TabsContent>
+
+        {/* ── Espace équipe (team_member accounts + SOP access) ── */}
+        <TabsContent value="team-space" className="mt-4">
+          <TeamSpaceTab />
         </TabsContent>
 
         {/* ── Invitations ── */}

@@ -13,6 +13,8 @@ import stockRoutes    from './routes/stock'
 import vehiclesRoutes from './routes/vehicles'
 import financeAiRoutes from './routes/financeAi'
 import publicLeadsRoutes from './routes/publicLeads'
+import teamRoutes      from './routes/team'
+import mySpaceRoutes   from './routes/mySpace'
 
 dotenv.config({ path: '.env.local' })
 
@@ -93,6 +95,8 @@ app.use('/api/stock',    stockRoutes)
 app.use('/api/vehicles', vehiclesRoutes)
 app.use('/api/finance-ai', financeAiRoutes)
 app.use('/api/public',    publicLeadsRoutes)
+app.use('/api/team',      teamRoutes)
+app.use('/api/my-space',  mySpaceRoutes)
 app.use('/api',          crudRoutes)
 
 /* ── Health check (no DB details in prod) ───────────────────── */

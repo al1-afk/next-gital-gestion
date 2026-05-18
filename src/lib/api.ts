@@ -12,6 +12,13 @@ export const tokenStore = {
   clear:  ()        => localStorage.removeItem('gestiq_token'),
 }
 
+/* Distinct slot for team_member JWT (separate session on same browser) */
+export const memberTokenStore = {
+  get:    ()        => localStorage.getItem('gestiq_member_token') ?? '',
+  set:    (t: string) => localStorage.setItem('gestiq_member_token', t),
+  clear:  ()        => localStorage.removeItem('gestiq_member_token'),
+}
+
 /* ── Token refresh (singleton promise — prevents parallel refreshes) */
 let _refreshPromise: Promise<string> | null = null
 
@@ -33,15 +40,22 @@ async function refreshAccessToken(): Promise<string> {
 }
 
 /* ── Base fetch ──────────────────────────────────────────────── */
+type TokenSource = 'admin' | 'member' | 'none'
+
 async function request<T>(
   method:  string,
   path:    string,
   body?:   unknown,
-  auth     = true,
+  auth:    boolean | TokenSource = true,
   _retry   = true,
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (auth) headers['Authorization'] = `Bearer ${tokenStore.get()}`
+  const source: TokenSource =
+    auth === true ? 'admin'
+    : auth === false ? 'none'
+    : auth
+  if (source === 'admin')  headers['Authorization'] = `Bearer ${tokenStore.get()}`
+  if (source === 'member') headers['Authorization'] = `Bearer ${memberTokenStore.get()}`
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -50,8 +64,8 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
 
-  /* Auto-refresh on 401 TOKEN_EXPIRED */
-  if (res.status === 401 && auth && _retry) {
+  /* Auto-refresh on 401 TOKEN_EXPIRED (admin-side only) */
+  if (res.status === 401 && source === 'admin' && _retry) {
     const data = await res.json().catch(() => ({}))
     if (data.code === 'TOKEN_EXPIRED') {
       try {
@@ -89,6 +103,15 @@ export const api = {
   delete: <T>(path: string)                  => request<T>('DELETE', path),
   publicGet: <T>(path: string)               => request<T>('GET',    path, undefined, false),
   publicPost:<T>(path: string, body: unknown)=> request<T>('POST',   path, body, false),
+}
+
+/* Same helpers but authenticated with the member token slot */
+export const memberApi = {
+  get:    <T>(path: string)                  => request<T>('GET',    path, undefined, 'member'),
+  post:   <T>(path: string, body: unknown)   => request<T>('POST',   path, body, 'member'),
+  patch:  <T>(path: string, body: unknown)   => request<T>('PATCH',  path, body, 'member'),
+  put:    <T>(path: string, body: unknown)   => request<T>('PUT',    path, body, 'member'),
+  delete: <T>(path: string)                  => request<T>('DELETE', path, undefined, 'member'),
 }
 
 /* ── Auth API ────────────────────────────────────────────────── */
@@ -146,6 +169,125 @@ export const tenantApi = {
     api.patch<{ allowed_modules: string[] | null; role: string }>(
       `/api/tenants/members/${userId}/access`, { allowed_modules }
     ),
+}
+
+/* ── Team management (admin) ─────────────────────────────────── */
+export interface TeamMemberAccess {
+  category: string
+  level:    'read' | 'complete' | 'edit'
+}
+
+export interface TeamMemberRow {
+  id:                 string
+  first_name:         string
+  last_name:          string
+  email:              string
+  telephone:          string | null
+  job_title:          string | null
+  member_type:        'employee' | 'trainer' | 'freelance'
+  account_status:     'invited' | 'active' | 'suspended' | 'archived'
+  avatar_url:         string | null
+  last_login_at:      string | null
+  invitation_sent_at: string | null
+  invitation_accepted_at: string | null
+  created_at:         string
+  access:             TeamMemberAccess[]
+  open_tasks_count:   number
+}
+
+export interface TeamTaskInput {
+  title:       string
+  description?: string
+  priority?:   'low' | 'normal' | 'high' | 'urgent'
+  due_date?:   string | null
+}
+
+export interface TeamInviteInput {
+  first_name:     string
+  last_name:      string
+  email:          string
+  phone?:         string
+  member_type?:   'employee' | 'trainer' | 'freelance'
+  job_title?:     string
+  sop_categories?: TeamMemberAccess[]
+  tasks?:         TeamTaskInput[]
+}
+
+export const teamMgmtApi = {
+  list:    () => api.get<TeamMemberRow[]>('/api/team/members'),
+  get:     (id: string) => api.get<any>(`/api/team/members/${id}`),
+  invite:  (data: TeamInviteInput) => api.post<{ id: string; invitation_url: string }>('/api/team/invite', data),
+  update:  (id: string, data: Partial<TeamInviteInput>) =>
+    api.patch<{ success: true }>(`/api/team/members/${id}`, data),
+  setAccess: (id: string, access: TeamMemberAccess[]) =>
+    request<{ success: true }>('PUT', `/api/team/members/${id}/access`, { access }),
+  suspend: (id: string) => api.post<{ success: true }>(`/api/team/members/${id}/suspend`, {}),
+  activate:(id: string) => api.post<{ success: true }>(`/api/team/members/${id}/activate`, {}),
+  resend:  (id: string) => api.post<{ success: true; invitation_url: string }>(`/api/team/members/${id}/resend`, {}),
+  resetPwd:(id: string) => api.post<{ success: true; reset_url: string }>(`/api/team/members/${id}/reset-password`, {}),
+  archive: (id: string) => api.delete<{ success: true }>(`/api/team/members/${id}`),
+
+  tasks:        (memberId: string) => api.get<any[]>(`/api/team/members/${memberId}/tasks`),
+  addTask:      (memberId: string, t: TeamTaskInput) => api.post<any>(`/api/team/members/${memberId}/tasks`, t),
+  updateTask:   (taskId: string, t: Partial<TeamTaskInput> & { status?: string }) =>
+    api.patch<any>(`/api/team/tasks/${taskId}`, t),
+  deleteTask:   (taskId: string) => api.delete<{ success: true }>(`/api/team/tasks/${taskId}`),
+
+  activity:     (memberId: string, limit = 100) =>
+    api.get<any[]>(`/api/team/members/${memberId}/activity?limit=${limit}`),
+}
+
+/* ── Team-member (employee/trainer) auth ─────────────────────── */
+export const memberAuthApi = {
+  /* Public — verify invitation token */
+  verifyInvite: (token: string) =>
+    api.publicGet<{
+      first_name: string; last_name: string; email: string;
+      job_title: string | null; tenant_name: string; expires_at: string | null;
+    }>(`/api/team/invite/${token}`),
+
+  /* Public — accept invite + set password → returns auth token */
+  acceptInvite: (token: string, password: string) =>
+    api.publicPost<{ token: string; member: any }>(`/api/team/invite/${token}/accept`, { password }),
+
+  login: (email: string, password: string) =>
+    api.publicPost<{ token: string; member: { id: string; first_name: string; last_name: string; tenant_slug: string } }>(
+      '/api/team/auth/login', { email, password }
+    ),
+
+  me: () => memberApi.get<{
+    id: string; tenant_id: string; tenant_slug: string; tenant_name: string;
+    first_name: string; last_name: string; email: string; job_title: string | null;
+    member_type: string; avatar_url: string | null; account_status: string;
+    access: { category: string; level: string }[];
+  }>('/api/team/auth/me'),
+
+  logout: () => memberApi.post<{ success: true }>('/api/team/auth/logout', {}).catch(() => ({ success: false })),
+}
+
+/* ── My-space (member) — uses memberApi (separate token slot) ── */
+export const mySpaceApi = {
+  dashboard: () => memberApi.get<{
+    profile: any
+    access: Array<{ category: string; level: string; total_sops: number }>
+    tasks:   { total: number; done: number; in_progress: number; todo: number; overdue: number }
+    recent_activity: any[]
+  }>('/api/my-space/dashboard'),
+
+  profile:    () => memberApi.get<any>('/api/my-space/profile'),
+  updateProfile: (data: { telephone?: string; avatar_url?: string }) =>
+    memberApi.put<{ success: true }>('/api/my-space/profile', data),
+  changePassword: (current_password: string, new_password: string) =>
+    memberApi.put<{ success: true }>('/api/my-space/password', { current_password, new_password }),
+
+  tasks:    () => memberApi.get<any[]>('/api/my-space/tasks'),
+  updateTaskStatus: (id: string, status: string) =>
+    memberApi.patch<{ success: true }>(`/api/my-space/tasks/${id}`, { status }),
+
+  sops:     (category?: string) => memberApi.get<any[]>(`/api/my-space/sops${category ? `?category=${category}` : ''}`),
+  sop:      (id: string) => memberApi.get<any>(`/api/my-space/sops/${id}`),
+  logSop:   (sop_id: string, action_type: string, details?: any) =>
+    memberApi.post<{ success: true }>('/api/my-space/sops/activity', { sop_id, action_type, details }),
 }
 
 /* ── Generic table API ───────────────────────────────────────── */
